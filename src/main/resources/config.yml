@@ -61,11 +61,182 @@ zones:
         drops: [BEETROOT:1, BEETROOT_SEEDS:1]
         require-mature: true
 
-  # The other zones found on this map, off until you want them. Coordinates come
-  # from the blocks actually present, padded a little.
-  #
-  #  riverside-farm  x 215..415  z  55..305   (~13,500 blocks)
-  #  terrace-farm    x 135..290  z 380..570   (~28,400 blocks — by far the largest)
-  #  east-field      x 650..760  z 490..600   (~3,200 blocks)
-  #  cottage-garden  x 440..505  z 320..360   (~500 blocks)
-  #  north-plot      x 675..730  z 260..295   (~500 blocks)
+  # The broad river valley fields (~13,500 farm blocks).
+  riverside-fields:
+    enabled: true
+    world: hub
+
+    display-name: "&aRiverside Fields"
+    discovery:
+      enabled: true
+      title: "&6&lRiverside Fields"
+      subtitle: "&7Farming region discovered"
+
+    min: {x: 215, y: 20,  z: 55}
+    max: {x: 415, y: 120, z: 305}
+
+    regen-seconds: 60
+
+    blocks:
+      minecraft:wheat:
+        drops: [WHEAT:1, WHEAT_SEEDS:1]
+        require-mature: true
+      minecraft:carrots:
+        drops: [CARROT:2]
+        require-mature: true
+      minecraft:potatoes:
+        drops: [POTATO:2]
+        require-mature: true
+      minecraft:beetroots:
+        drops: [BEETROOT:1, BEETROOT_SEEDS:1]
+        require-mature: true
+
+  # The largest farm on the map, stepping down to the water (~28,400 blocks).
+  lowland-terraces:
+    enabled: true
+    world: hub
+
+    display-name: "&aLowland Terraces"
+    discovery:
+      enabled: true
+      title: "&6&lLowland Terraces"
+      subtitle: "&7Farming region discovered"
+
+    min: {x: 135, y: 20,  z: 380}
+    max: {x: 290, y: 120, z: 570}
+
+    regen-seconds: 60
+
+    blocks:
+      minecraft:wheat:
+        drops: [WHEAT:1, WHEAT_SEEDS:1]
+        require-mature: true
+      minecraft:carrots:
+        drops: [CARROT:2]
+        require-mature: true
+      minecraft:potatoes:
+        drops: [POTATO:2]
+        require-mature: true
+      minecraft:beetroots:
+        drops: [BEETROOT:1, BEETROOT_SEEDS:1]
+        require-mature: true
+
+  # Open fields on the eastern edge (~3,200 blocks).
+  eastern-meadow:
+    enabled: true
+    world: hub
+
+    display-name: "&aEastern Meadow"
+    discovery:
+      enabled: true
+      title: "&6&lEastern Meadow"
+      subtitle: "&7Farming region discovered"
+
+    min: {x: 650, y: 20,  z: 490}
+    max: {x: 760, y: 120, z: 600}
+
+    regen-seconds: 45
+
+    blocks:
+      minecraft:wheat:
+        drops: [WHEAT:1, WHEAT_SEEDS:1]
+        require-mature: true
+      minecraft:carrots:
+        drops: [CARROT:2]
+        require-mature: true
+      minecraft:potatoes:
+        drops: [POTATO:2]
+        require-mature: true
+      minecraft:beetroots:
+        drops: [BEETROOT:1, BEETROOT_SEEDS:1]
+        require-mature: true
+
+  # A kitchen garden behind the cottages (~500 blocks).
+  cottage-garden:
+    enabled: true
+    world: hub
+
+    display-name: "&aCottage Garden"
+    discovery:
+      enabled: true
+      title: "&6&lCottage Garden"
+      subtitle: "&7Farming region discovered"
+
+    min: {x: 440, y: 20,  z: 320}
+    max: {x: 505, y: 120, z: 360}
+
+    regen-seconds: 30
+
+    blocks:
+      minecraft:wheat:
+        drops: [WHEAT:1, WHEAT_SEEDS:1]
+        require-mature: true
+      minecraft:carrots:
+        drops: [CARROT:2]
+        require-mature: true
+      minecraft:potatoes:
+        drops: [POTATO:2]
+        require-mature: true
+      minecraft:beetroots:
+        drops: [BEETROOT:1, BEETROOT_SEEDS:1]
+        require-mature: true
+
+  # Allotment strips north of the road (~500 blocks).
+  northern-allotment:
+    enabled: true
+    world: hub
+
+    display-name: "&aNorthern Allotment"
+    discovery:
+      enabled: true
+      title: "&6&lNorthern Allotment"
+      subtitle: "&7Farming region discovered"
+
+    min: {x: 675, y: 20,  z: 260}
+    max: {x: 730, y: 120, z: 295}
+
+    regen-seconds: 30
+
+    blocks:
+      minecraft:wheat:
+        drops: [WHEAT:1, WHEAT_SEEDS:1]
+        require-mature: true
+      minecraft:carrots:
+        drops: [CARROT:2]
+        require-mature: true
+      minecraft:potatoes:
+        drops: [POTATO:2]
+        require-mature: true
+      minecraft:beetroots:
+        drops: [BEETROOT:1, BEETROOT_SEEDS:1]
+        require-mature: true
+
+  # A small roadside plot (~140 blocks).
+  roadside-patch:
+    enabled: true
+    world: hub
+
+    display-name: "&aRoadside Patch"
+    discovery:
+      enabled: true
+      title: "&6&lRoadside Patch"
+      subtitle: "&7Farming region discovered"
+
+    min: {x: 730, y: 20,  z: 200}
+    max: {x: 750, y: 120, z: 225}
+
+    regen-seconds: 30
+
+    blocks:
+      minecraft:wheat:
+        drops: [WHEAT:1, WHEAT_SEEDS:1]
+        require-mature: true
+      minecraft:carrots:
+        drops: [CARROT:2]
+        require-mature: true
+      minecraft:potatoes:
+        drops: [POTATO:2]
+        require-mature: true
+      minecraft:beetroots:
+        drops: [BEETROOT:1, BEETROOT_SEEDS:1]
+        require-mature: true
