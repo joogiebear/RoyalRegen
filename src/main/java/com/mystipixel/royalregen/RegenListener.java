@@ -33,14 +33,19 @@ public final class RegenListener implements Listener {
     }
 
     /**
-     * Harvest a listed block and schedule its return.
+     * Refuse a break that is not a harvest, as early as possible.
      *
-     * <p>The event is left <em>uncancelled</em> so the rest of the server sees a real break. Only the
-     * vanilla drops are suppressed, and the configured ones given instead, so what a harvest is worth
-     * stays a config decision.
+     * <p>This runs at {@code LOWEST} rather than alongside the harvest below, because a refusal has
+     * to land before anything else reacts to the break. Skills, jobs and quest tasks listen around
+     * {@code NORMAL}; denying at {@code HIGHEST} let them award XP for a break that was then
+     * cancelled, so a player could stand at any protected block and farm progress off a block that
+     * never broke.
+     *
+     * <p>The three refusals are here together for that reason — a block still coming back, and a crop
+     * that has not grown, are equally "not a harvest" and would pay out just the same.
      */
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onBreak(BlockBreakEvent event) {
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onBreakDeny(BlockBreakEvent event) {
         Block block = event.getBlock();
         Zone zone = plugin.zoneAt(block);
         if (zone == null) {
@@ -66,7 +71,33 @@ public final class RegenListener implements Listener {
         if (rule.requireMature() && !isMature(block)) {
             event.setCancelled(true);
             plugin.messages().send(player, "not-grown");
+        }
+    }
+
+    /**
+     * Harvest a listed block and schedule its return.
+     *
+     * <p>The event is left <em>uncancelled</em> so the rest of the server sees a real break. Only the
+     * vanilla drops are suppressed, and the configured ones given instead, so what a harvest is worth
+     * stays a config decision.
+     *
+     * <p>Runs late, and only reaches blocks {@link #onBreakDeny} allowed through — so by here the
+     * break is definitely a harvest, and everything that watched it happen was right to.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onBreak(BlockBreakEvent event) {
+        Block block = event.getBlock();
+        Zone zone = plugin.zoneAt(block);
+        if (zone == null) {
             return;
+        }
+        Player player = event.getPlayer();
+        if (player.getGameMode() == GameMode.CREATIVE) {
+            return;
+        }
+        Zone.Rule rule = zone.rule(block.getType());
+        if (rule == null) {
+            return;                                      // refused already; nothing to harvest
         }
 
         event.setDropItems(false);                       // vanilla drops replaced by the config's
