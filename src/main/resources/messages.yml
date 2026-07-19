@@ -1,0 +1,10 @@
+# RoyalRegen - player-facing text.
+# Delete a line to use its built-in wording, or empty it ("") to silence that message.
+
+prefix: ""
+
+# Shown when a crop is broken before it has grown.
+not-grown: "&7That isn't ready to harvest yet."
+
+# /royalregen reload
+reloaded: "&aRoyalRegen reloaded &f%zones%&a zone(s)."
