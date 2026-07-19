@@ -45,7 +45,14 @@ public final class RoyalRegenPlugin extends JavaPlugin {
         // front of the queue rather than every pending block.
         getServer().getScheduler().runTaskTimer(this, regen::tick, 20L, 20L);
 
-        getLogger().info("RoyalRegen enabled — " + zones.size() + " zone(s).");
+        if (zones.isEmpty()) {
+            // The shipped config is two disabled examples, since coordinates only mean something on
+            // the map they were measured on. Say so, rather than looking quietly broken.
+            getLogger().info("RoyalRegen enabled — no zones active yet. Set the corners of a zone in "
+                    + "config.yml, flip enabled: true, then /royalregen reload.");
+        } else {
+            getLogger().info("RoyalRegen enabled — " + zones.size() + " zone(s).");
+        }
     }
 
     @Override

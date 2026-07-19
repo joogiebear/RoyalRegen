@@ -11,6 +11,15 @@
 #
 #  Apply changes with /royalregen reload. /royalregen status shows what is loaded.
 #
+#  ── THE ZONES BELOW ARE EXAMPLES ─────────────────────────────────────────────
+#  Both ship DISABLED, because a cuboid only means something on the map it was
+#  measured on — coordinates from someone else's world describe nothing in yours.
+#  Set your own corners, then flip enabled: true.
+#
+#  To get the corners: stand at one corner of the area and read the coordinates
+#  off the F3 debug screen (or a WorldEdit selection), then the opposite corner.
+#  Order does not matter — min/max are sorted on load.
+#
 #  ── A NOTE ON ECONOMY ────────────────────────────────────────────────────────
 #  A regen zone is an INFINITE source: every block comes back. If a shop buys what
 #  it produces at a fixed minimum price, players have unlimited income at that
@@ -18,28 +27,35 @@
 #
 #  The throttles are 'drops' (what one harvest is worth) and 'regen-seconds' (how
 #  fast it comes back). Set them against what the item sells for, not by feel.
+#
+#  Size matters less than you would think: a field regenerating faster than anyone
+#  can harvest is capped by clicking speed, not by how big it is. Price a harvest
+#  by what a player earns per hour of doing it.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 zones:
 
-  # The terraced fields north-east of spawn (~6,000 farm blocks).
-  hillside-farm:
-    enabled: true
+  # ── Example 1: a public farm ────────────────────────────────────────────────
+  # The common case — a field in a hub world that players may harvest but not
+  # rebuild. Everything not listed under blocks: stays protected.
+  example-farm:
+    enabled: false
     world: hub
 
     # Shown when a player walks in. Naming an area turns it from scenery into a place.
-    display-name: "&aHillside Terraces"
+    display-name: "&aExample Field"
     discovery:
       enabled: true
       # The first visit gets this; later visits just show the display name, so a
       # regular isn't handed a card every time they cross the fence.
-      title: "&6&lHillside Terraces"
+      title: "&6&lExample Field"
       subtitle: "&7Farming region discovered"
 
-    # Opposite corners, inclusive. Y is deliberately generous: these fields step
-    # down a hillside, so a tight vertical range would miss the lower terraces.
-    min: {x: 450, y: 30,  z: 110}
-    max: {x: 570, y: 120, z: 225}
+    # Opposite corners, inclusive. Give Y a generous range if the ground is uneven:
+    # a field terraced down a hillside will sit outside a tight vertical band, and
+    # the blocks that fall outside it simply will not regenerate.
+    min: {x: 0,   y: 60,  z: 0}
+    max: {x: 100, y: 120, z: 100}
 
     # How long until a harvested block returns.
     regen-seconds: 45
@@ -61,182 +77,31 @@ zones:
         drops: [BEETROOT:1, BEETROOT_SEEDS:1]
         require-mature: true
 
-  # The broad river valley fields (~13,500 farm blocks).
-  riverside-fields:
-    enabled: true
+  # ── Example 2: a mine ───────────────────────────────────────────────────────
+  # Nothing here is farming-specific. A zone is a cuboid plus a block list, so the
+  # same mechanism gives you a public mine — longer timers, because ore is worth
+  # more per swing than wheat and comes back just as forever.
+  #
+  # 'require-mature' is omitted: it only means anything for crops.
+  example-mine:
+    enabled: false
     world: hub
 
-    display-name: "&aRiverside Fields"
+    display-name: "&7Example Quarry"
     discovery:
       enabled: true
-      title: "&6&lRiverside Fields"
-      subtitle: "&7Farming region discovered"
+      title: "&6&lExample Quarry"
+      subtitle: "&7Mining region discovered"
 
-    min: {x: 215, y: 20,  z: 55}
-    max: {x: 415, y: 120, z: 305}
+    min: {x: 200, y: 10, z: 200}
+    max: {x: 260, y: 60, z: 260}
 
-    regen-seconds: 60
-
-    blocks:
-      minecraft:wheat:
-        drops: [WHEAT:1, WHEAT_SEEDS:1]
-        require-mature: true
-      minecraft:carrots:
-        drops: [CARROT:2]
-        require-mature: true
-      minecraft:potatoes:
-        drops: [POTATO:2]
-        require-mature: true
-      minecraft:beetroots:
-        drops: [BEETROOT:1, BEETROOT_SEEDS:1]
-        require-mature: true
-
-  # The largest farm on the map, stepping down to the water (~28,400 blocks).
-  lowland-terraces:
-    enabled: true
-    world: hub
-
-    display-name: "&aLowland Terraces"
-    discovery:
-      enabled: true
-      title: "&6&lLowland Terraces"
-      subtitle: "&7Farming region discovered"
-
-    min: {x: 135, y: 20,  z: 380}
-    max: {x: 290, y: 120, z: 570}
-
-    regen-seconds: 60
+    regen-seconds: 120
 
     blocks:
-      minecraft:wheat:
-        drops: [WHEAT:1, WHEAT_SEEDS:1]
-        require-mature: true
-      minecraft:carrots:
-        drops: [CARROT:2]
-        require-mature: true
-      minecraft:potatoes:
-        drops: [POTATO:2]
-        require-mature: true
-      minecraft:beetroots:
-        drops: [BEETROOT:1, BEETROOT_SEEDS:1]
-        require-mature: true
-
-  # Open fields on the eastern edge (~3,200 blocks).
-  eastern-meadow:
-    enabled: true
-    world: hub
-
-    display-name: "&aEastern Meadow"
-    discovery:
-      enabled: true
-      title: "&6&lEastern Meadow"
-      subtitle: "&7Farming region discovered"
-
-    min: {x: 650, y: 20,  z: 490}
-    max: {x: 760, y: 120, z: 600}
-
-    regen-seconds: 45
-
-    blocks:
-      minecraft:wheat:
-        drops: [WHEAT:1, WHEAT_SEEDS:1]
-        require-mature: true
-      minecraft:carrots:
-        drops: [CARROT:2]
-        require-mature: true
-      minecraft:potatoes:
-        drops: [POTATO:2]
-        require-mature: true
-      minecraft:beetroots:
-        drops: [BEETROOT:1, BEETROOT_SEEDS:1]
-        require-mature: true
-
-  # A kitchen garden behind the cottages (~500 blocks).
-  cottage-garden:
-    enabled: true
-    world: hub
-
-    display-name: "&aCottage Garden"
-    discovery:
-      enabled: true
-      title: "&6&lCottage Garden"
-      subtitle: "&7Farming region discovered"
-
-    min: {x: 440, y: 20,  z: 320}
-    max: {x: 505, y: 120, z: 360}
-
-    regen-seconds: 30
-
-    blocks:
-      minecraft:wheat:
-        drops: [WHEAT:1, WHEAT_SEEDS:1]
-        require-mature: true
-      minecraft:carrots:
-        drops: [CARROT:2]
-        require-mature: true
-      minecraft:potatoes:
-        drops: [POTATO:2]
-        require-mature: true
-      minecraft:beetroots:
-        drops: [BEETROOT:1, BEETROOT_SEEDS:1]
-        require-mature: true
-
-  # Allotment strips north of the road (~500 blocks).
-  northern-allotment:
-    enabled: true
-    world: hub
-
-    display-name: "&aNorthern Allotment"
-    discovery:
-      enabled: true
-      title: "&6&lNorthern Allotment"
-      subtitle: "&7Farming region discovered"
-
-    min: {x: 675, y: 20,  z: 260}
-    max: {x: 730, y: 120, z: 295}
-
-    regen-seconds: 30
-
-    blocks:
-      minecraft:wheat:
-        drops: [WHEAT:1, WHEAT_SEEDS:1]
-        require-mature: true
-      minecraft:carrots:
-        drops: [CARROT:2]
-        require-mature: true
-      minecraft:potatoes:
-        drops: [POTATO:2]
-        require-mature: true
-      minecraft:beetroots:
-        drops: [BEETROOT:1, BEETROOT_SEEDS:1]
-        require-mature: true
-
-  # A small roadside plot (~140 blocks).
-  roadside-patch:
-    enabled: true
-    world: hub
-
-    display-name: "&aRoadside Patch"
-    discovery:
-      enabled: true
-      title: "&6&lRoadside Patch"
-      subtitle: "&7Farming region discovered"
-
-    min: {x: 730, y: 20,  z: 200}
-    max: {x: 750, y: 120, z: 225}
-
-    regen-seconds: 30
-
-    blocks:
-      minecraft:wheat:
-        drops: [WHEAT:1, WHEAT_SEEDS:1]
-        require-mature: true
-      minecraft:carrots:
-        drops: [CARROT:2]
-        require-mature: true
-      minecraft:potatoes:
-        drops: [POTATO:2]
-        require-mature: true
-      minecraft:beetroots:
-        drops: [BEETROOT:1, BEETROOT_SEEDS:1]
-        require-mature: true
+      minecraft:stone:
+        drops: [COBBLESTONE:1]
+      minecraft:coal_ore:
+        drops: [COAL:1]
+      minecraft:iron_ore:
+        drops: [RAW_IRON:1]

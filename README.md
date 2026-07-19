@@ -30,15 +30,19 @@ When a listed block is broken:
 
 ## Configuration
 
+The shipped config contains two examples — a farm and a mine — both **disabled**, because a cuboid only
+means something on the map it was measured on. Read your own corners off the F3 screen (or a WorldEdit
+selection), set them, then enable the zone.
+
 ```yaml
 zones:
-  hillside-farm:
+  village-fields:
     enabled: true
     world: hub
 
-    # Opposite corners, inclusive.
-    min: {x: 450, y: 30,  z: 110}
-    max: {x: 570, y: 120, z: 225}
+    # Opposite corners, inclusive. Order does not matter — they are sorted on load.
+    min: {x: 0,   y: 60,  z: 0}
+    max: {x: 100, y: 120, z: 100}
 
     regen-seconds: 45
 
@@ -52,11 +56,14 @@ zones:
 ```
 
 Block names work with or without the `minecraft:` namespace. `require-mature` refuses crops that haven't
-finished growing. `drops` is what the player receives — leave it empty and a harvest gives nothing, which
-is occasionally what you want.
+finished growing, and only means anything for crops. `drops` is what the player receives — leave it empty
+and a harvest gives nothing, which is occasionally what you want.
 
 Give zones a generous vertical range if the terrain is uneven; fields terraced down a hillside will
 otherwise lose their lower rows.
+
+Nothing here is farming-specific. Swap the block list for ores and a longer `regen-seconds` and the same
+zone is a public mine.
 
 ## Commands
 
