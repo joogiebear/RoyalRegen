@@ -35,9 +35,14 @@ public final class Zone {
     private final int maxZ;
     private final long regenMillis;
     private final Map<Material, Rule> rules;
+    private final String displayName;
+    private final boolean announce;
+    private final String discoveryTitle;
+    private final String discoverySubtitle;
 
     private Zone(String id, String world, int minX, int minY, int minZ, int maxX, int maxY, int maxZ,
-                 long regenMillis, Map<Material, Rule> rules) {
+                 long regenMillis, Map<Material, Rule> rules, String displayName, boolean announce,
+                 String discoveryTitle, String discoverySubtitle) {
         this.id = id;
         this.world = world;
         this.minX = minX;
@@ -48,6 +53,10 @@ public final class Zone {
         this.maxZ = maxZ;
         this.regenMillis = regenMillis;
         this.rules = rules;
+        this.displayName = displayName;
+        this.announce = announce;
+        this.discoveryTitle = discoveryTitle;
+        this.discoverySubtitle = discoverySubtitle;
     }
 
     /** Read one zone, or null (with a reason logged) if it can't produce a usable one. */
@@ -96,11 +105,16 @@ public final class Zone {
         }
 
         int seconds = Math.max(1, sec.getInt("regen-seconds", 45));
+        String display = sec.getString("display-name", "&f" + id);
+        ConfigurationSection disc = sec.getConfigurationSection("discovery");
+        boolean announce = disc == null || disc.getBoolean("enabled", true);
+        String title = disc != null ? disc.getString("title", "&6" + display) : "&6" + display;
+        String subtitle = disc != null ? disc.getString("subtitle", "&7Discovered") : "&7Discovered";
         return new Zone(id, world,
                 Math.min(min.getInt("x"), max.getInt("x")), Math.min(min.getInt("y"), max.getInt("y")),
                 Math.min(min.getInt("z"), max.getInt("z")), Math.max(min.getInt("x"), max.getInt("x")),
                 Math.max(min.getInt("y"), max.getInt("y")), Math.max(min.getInt("z"), max.getInt("z")),
-                seconds * 1000L, rules);
+                seconds * 1000L, rules, display, announce, title, subtitle);
     }
 
     /**
@@ -164,4 +178,8 @@ public final class Zone {
     public String world() { return world; }
     public long regenMillis() { return regenMillis; }
     public int blockCount() { return rules.size(); }
+    public String displayName() { return displayName; }
+    public boolean announce() { return announce; }
+    public String discoveryTitle() { return discoveryTitle; }
+    public String discoverySubtitle() { return discoverySubtitle; }
 }

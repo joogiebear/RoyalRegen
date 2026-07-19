@@ -40,8 +40,8 @@ public final class RegenService {
     /**
      * Take the block now and schedule its return.
      *
-     * <p>Crops are reset to age 0 rather than removed: a bare stem reads as "harvested, growing back",
-     * where air reads as a hole someone dug in the farm.
+     * <p>Crops are reset to age 0 rather than left as air: a bare stem reads as "harvested, growing
+     * back", where a hole reads as something a player dug out of the farm.
      */
     public void harvest(Block block, long regenMillis) {
         Location key = block.getLocation();
@@ -51,12 +51,18 @@ public final class RegenService {
         BlockData original = block.getBlockData();
         pending.put(key, new Pending(original, System.currentTimeMillis() + regenMillis));
 
-        BlockData reset = original.clone();
-        if (reset instanceof Ageable ageable) {
-            ageable.setAge(0);
-            block.setBlockData(ageable, false);
-        } else {
-            block.setType(org.bukkit.Material.AIR, false);
+        // A tick later, because the break event is left uncancelled so other plugins can see it —
+        // which means the server sets this block to air immediately after this method returns, and
+        // anything written now would simply be overwritten.
+        if (original instanceof Ageable) {
+            plugin.getServer().getScheduler().runTask(plugin, () -> {
+                if (!block.getType().isAir()) {
+                    return;                     // something else already refilled it; leave it alone
+                }
+                BlockData reset = original.clone();
+                ((Ageable) reset).setAge(0);
+                block.setBlockData(reset, false);
+            });
         }
     }
 

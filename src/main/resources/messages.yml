@@ -6,5 +6,11 @@ prefix: ""
 # Shown when a crop is broken before it has grown.
 not-grown: "&7That isn't ready to harvest yet."
 
+# Shown when breaking something in a zone that isn't on its harvest list.
+not-harvestable: "&cYou can only harvest crops here."
+
+# Shown when trying to place a block inside a zone.
+no-building: "&cYou can't build here."
+
 # /royalregen reload
 reloaded: "&aRoyalRegen reloaded &f%zones%&a zone(s)."

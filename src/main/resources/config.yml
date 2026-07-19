@@ -27,6 +27,15 @@ zones:
     enabled: true
     world: hub
 
+    # Shown when a player walks in. Naming an area turns it from scenery into a place.
+    display-name: "&aHillside Terraces"
+    discovery:
+      enabled: true
+      # The first visit gets this; later visits just show the display name, so a
+      # regular isn't handed a card every time they cross the fence.
+      title: "&6&lHillside Terraces"
+      subtitle: "&7Farming region discovered"
+
     # Opposite corners, inclusive. Y is deliberately generous: these fields step
     # down a hillside, so a tight vertical range would miss the lower terraces.
     min: {x: 450, y: 30,  z: 110}

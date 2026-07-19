@@ -23,12 +23,14 @@ public final class RoyalRegenPlugin extends JavaPlugin {
     private final List<Zone> zones = new ArrayList<>();
     private RegenService regen;
     private MessageManager messages;
+    private DiscoveryService discovery;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
         this.messages = new MessageManager(this);
         this.regen = new RegenService(this);
+        this.discovery = new DiscoveryService(this);
         reloadZones();
 
         getServer().getPluginManager().registerEvents(new RegenListener(this), this);
@@ -48,6 +50,9 @@ public final class RoyalRegenPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (discovery != null) {
+            discovery.save();
+        }
         if (regen != null) {
             int restored = regen.restoreAll();
             if (restored > 0) {
@@ -93,6 +98,10 @@ public final class RoyalRegenPlugin extends JavaPlugin {
 
     public RegenService regen() {
         return regen;
+    }
+
+    public DiscoveryService discovery() {
+        return discovery;
     }
 
     public MessageManager messages() {
