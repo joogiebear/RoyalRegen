@@ -25,8 +25,14 @@
 #  it produces at a fixed minimum price, players have unlimited income at that
 #  price, and no dynamic pricing fixes it because the floor is the floor.
 #
-#  The throttles are 'drops' (what one harvest is worth) and 'regen-seconds' (how
-#  fast it comes back). Set them against what the item sells for, not by feel.
+#  The throttle is 'regen-seconds' (how fast it comes back). Set it against what
+#  the item sells for, not by feel.
+#
+#  Do NOT throttle with 'drops'. Overriding drops stops BlockDropItemEvent firing,
+#  and that is the event every drop perk on the server reads — Fortune, reforge and
+#  talisman multipliers, telekinesis, eco's DropQueue. They go silently inert: a
+#  player wearing a "double crops" reforge farms the zone and gets base yield, with
+#  nothing in any log to explain why. See RegenListener#onBreak.
 #
 #  Size matters less than you would think: a field regenerating faster than anyone
 #  can harvest is capped by clicking speed, not by how big it is. Price a harvest
@@ -60,21 +66,23 @@ zones:
     # How long until a harvested block returns.
     regen-seconds: 45
 
-    # Only these are harvestable here. 'drops' is what the player gets — not the
-    # block's vanilla drops — so a harvest is worth exactly what you decide.
-    # 'require-mature' refuses crops that haven't finished growing.
+    # Only these are harvestable here. 'require-mature' refuses crops that haven't
+    # finished growing.
+    #
+    # No 'drops' key means vanilla drops, untouched — which is almost always what
+    # you want. Crops keep their real seed variance, and every drop perk on the
+    # server works with no integration because nothing is intercepting them.
+    #
+    # Set 'drops' ONLY where vanilla is genuinely wrong for the block. It replaces
+    # the vanilla drops entirely, which also means no perk can multiply them.
     blocks:
       minecraft:wheat:
-        drops: [WHEAT:1, WHEAT_SEEDS:1]
         require-mature: true
       minecraft:carrots:
-        drops: [CARROT:2]
         require-mature: true
       minecraft:potatoes:
-        drops: [POTATO:2]
         require-mature: true
       minecraft:beetroots:
-        drops: [BEETROOT:1, BEETROOT_SEEDS:1]
         require-mature: true
 
   # ── Example 2: a mine ───────────────────────────────────────────────────────
@@ -98,10 +106,11 @@ zones:
 
     regen-seconds: 120
 
+    # All vanilla here too: stone already gives cobblestone, coal ore gives coal,
+    # iron ore gives raw iron. Spelling those out would only cost the players their
+    # Fortune. Ore is where Fortune matters most, so this is the last place to
+    # override drops.
     blocks:
-      minecraft:stone:
-        drops: [COBBLESTONE:1]
-      minecraft:coal_ore:
-        drops: [COAL:1]
-      minecraft:iron_ore:
-        drops: [RAW_IRON:1]
+      minecraft:stone: {}
+      minecraft:coal_ore: {}
+      minecraft:iron_ore: {}

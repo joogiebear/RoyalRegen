@@ -77,12 +77,30 @@ public final class RegenListener implements Listener {
     /**
      * Harvest a listed block and schedule its return.
      *
-     * <p>The event is left <em>uncancelled</em> so the rest of the server sees a real break. Only the
-     * vanilla drops are suppressed, and the configured ones given instead, so what a harvest is worth
-     * stays a config decision.
+     * <p>The event is left <em>uncancelled</em> so the rest of the server sees a real break. Runs
+     * late, and only reaches blocks {@link #onBreakDeny} allowed through — so by here the break is
+     * definitely a harvest, and everything that watched it happen was right to.
      *
-     * <p>Runs late, and only reaches blocks {@link #onBreakDeny} allowed through — so by here the
-     * break is definitely a harvest, and everything that watched it happen was right to.
+     * <h2>Why an empty drop list means "leave it alone"</h2>
+     *
+     * <p>Suppressing vanilla drops does not merely replace them: {@code BlockDropItemEvent} is only
+     * fired when a break actually drops something, so turning drops off stops that event happening
+     * at all. Every perk that reads or modifies a drop list is then blind — Fortune and its
+     * relatives, reforge and talisman drop multipliers, telekinesis, and eco's DropQueue. They do
+     * not fail; they find nothing to multiply and quietly do nothing.
+     *
+     * <p>That is the worst shape a bug can take on a progression server. A player equips a reforge
+     * that promises double crops, farms a regen zone, gets exactly what they got before, and there
+     * is no error anywhere to explain it.
+     *
+     * <p>So with no {@code drops:} configured the vanilla pipeline is left completely untouched.
+     * Perks work with no integration code because nothing is being intercepted. Crops also get
+     * their real seed variance back, which a fixed list cannot express.
+     *
+     * <p>A configured {@code drops:} list still overrides, for blocks where vanilla is wrong. Be
+     * aware that it reintroduces exactly the problem above for that block — the drops are no longer
+     * vanilla drops, so nothing multiplies them. Use it where that is the point, not as a throttle;
+     * {@code regen-seconds} throttles without lying to the rest of the server.
      */
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onBreak(BlockBreakEvent event) {
@@ -100,8 +118,12 @@ public final class RegenListener implements Listener {
             return;                                      // refused already; nothing to harvest
         }
 
-        event.setDropItems(false);                       // vanilla drops replaced by the config's
         plugin.regen().harvest(block, zone.regenMillis());
+        if (rule.drops().isEmpty()) {
+            return;                                      // vanilla drops stand — see above
+        }
+
+        event.setDropItems(false);                       // explicit override; vanilla replaced
         for (ItemStack drop : rule.drops()) {
             block.getWorld().dropItemNaturally(block.getLocation().add(0.5, 0.2, 0.5), drop.clone());
         }
