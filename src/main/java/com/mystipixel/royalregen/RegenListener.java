@@ -4,7 +4,6 @@ import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.Tag;
 import org.bukkit.block.Block;
-import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.Ageable;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -18,6 +17,11 @@ import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.Set;
+
 /**
  * Harvesting inside a regen zone, and keeping everything else in it intact.
  *
@@ -28,8 +32,12 @@ import org.bukkit.inventory.ItemStack;
  */
 public final class RegenListener implements Listener {
 
-    /** How far up a trunk to look for leaves. Tall jungle and spruce comfortably fit inside this. */
-    private static final int TRUNK_SCAN_LIMIT = 48;
+    /**
+     * How many connected logs to examine before giving up on finding a canopy. Generous, because
+     * hand-built trees are far larger than generated ones and the search stops the moment it finds
+     * a leaf - the limit is only reached by something that is genuinely not a tree.
+     */
+    private static final int TREE_SCAN_LIMIT = 512;
 
     private final RoyalRegenPlugin plugin;
 
@@ -87,26 +95,52 @@ public final class RegenListener implements Listener {
     /**
      * Whether a log belongs to a living tree rather than something built out of the same block.
      *
-     * <p>Walks up the trunk: a tree's logs end in its canopy, a wall's end in a roof, a floor, or
-     * air. That beats checking for leaves within a radius, which has to choose between a radius too
-     * small for a spruce — whose trunk can stand twenty blocks below its lowest leaf — and one so
-     * large that any wall built near a tree reads as part of it.
+     * <p>Spreads through connected logs looking for a canopy. An earlier version walked straight up
+     * and stopped at the first non-log, which is fine for a generated tree but wrong for a built
+     * one: hand-made trunks lean, taper, branch and stand two or three blocks thick, so the column
+     * directly above any given log is often air long before the leaves start. Every such tree was
+     * refused.
      *
-     * <p>It is a heuristic, and it inherits the one thing Minecraft cannot tell us: a log is a log.
-     * A log pillar holding up a decorative canopy will read as a tree. That is the failure worth
-     * having, because it errs toward "harvestable" only where someone deliberately put leaves above
-     * a post, and the block comes back on the regen timer either way.
+     * <p>A radius check around the block would fail differently and worse — it has to pick between
+     * a radius too small for a trunk standing twenty blocks below its lowest leaf, and one so large
+     * that any wall near a tree reads as part of it.
+     *
+     * <p>The spread never goes downward. Canopies sit above trunks, so upward and sideways is all a
+     * tree needs, while a wall searched downward would reach the ground and wander into whatever
+     * else is connected there.
+     *
+     * <p>It remains a heuristic, because Minecraft cannot tell us a log's purpose. A post under a
+     * decorative canopy reads as a tree, and a wall built hard against a real trunk inherits it.
+     * Both err toward "harvestable" only where someone deliberately put the two together, and the
+     * block returns on the regen timer regardless.
      */
     private static boolean partOfTree(Block block) {
-        Block cursor = block;
-        for (int step = 0; step < TRUNK_SCAN_LIMIT; step++) {
-            cursor = cursor.getRelative(BlockFace.UP);
-            Material type = cursor.getType();
-            if (Tag.LEAVES.isTagged(type)) {
-                return true;
-            }
-            if (!Tag.LOGS.isTagged(type)) {
-                return false;                            // roof, floor or sky - not a trunk
+        Set<Block> seen = new HashSet<>();
+        Deque<Block> queue = new ArrayDeque<>();
+        queue.add(block);
+        seen.add(block);
+
+        int scanned = 0;
+        while (!queue.isEmpty() && scanned < TREE_SCAN_LIMIT) {
+            Block current = queue.poll();
+            scanned++;
+
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = 0; dy <= 1; dy++) {        // never downward - see below
+                    for (int dz = -1; dz <= 1; dz++) {
+                        if (dx == 0 && dy == 0 && dz == 0) {
+                            continue;
+                        }
+                        Block next = current.getRelative(dx, dy, dz);
+                        Material type = next.getType();
+                        if (Tag.LEAVES.isTagged(type)) {
+                            return true;                 // reached a canopy
+                        }
+                        if (Tag.LOGS.isTagged(type) && seen.add(next)) {
+                            queue.add(next);
+                        }
+                    }
+                }
             }
         }
         return false;
