@@ -2,7 +2,9 @@ package com.mystipixel.royalregen;
 
 import org.bukkit.GameMode;
 import org.bukkit.Material;
+import org.bukkit.Tag;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.Ageable;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -25,6 +27,9 @@ import org.bukkit.inventory.ItemStack;
  * collections, jobs and skills never saw a harvest happen.
  */
 public final class RegenListener implements Listener {
+
+    /** How far up a trunk to look for leaves. Tall jungle and spruce comfortably fit inside this. */
+    private static final int TRUNK_SCAN_LIMIT = 48;
 
     private final RoyalRegenPlugin plugin;
 
@@ -71,15 +76,59 @@ public final class RegenListener implements Listener {
         if (rule.requireMature() && !isMature(block)) {
             event.setCancelled(true);
             plugin.messages().send(player, "not-grown");
+            return;
         }
+        if (rule.requireLeaves() && !partOfTree(block)) {
+            event.setCancelled(true);
+            plugin.messages().send(player, "not-a-tree");
+        }
+    }
+
+    /**
+     * Whether a log belongs to a living tree rather than something built out of the same block.
+     *
+     * <p>Walks up the trunk: a tree's logs end in its canopy, a wall's end in a roof, a floor, or
+     * air. That beats checking for leaves within a radius, which has to choose between a radius too
+     * small for a spruce — whose trunk can stand twenty blocks below its lowest leaf — and one so
+     * large that any wall built near a tree reads as part of it.
+     *
+     * <p>It is a heuristic, and it inherits the one thing Minecraft cannot tell us: a log is a log.
+     * A log pillar holding up a decorative canopy will read as a tree. That is the failure worth
+     * having, because it errs toward "harvestable" only where someone deliberately put leaves above
+     * a post, and the block comes back on the regen timer either way.
+     */
+    private static boolean partOfTree(Block block) {
+        Block cursor = block;
+        for (int step = 0; step < TRUNK_SCAN_LIMIT; step++) {
+            cursor = cursor.getRelative(BlockFace.UP);
+            Material type = cursor.getType();
+            if (Tag.LEAVES.isTagged(type)) {
+                return true;
+            }
+            if (!Tag.LOGS.isTagged(type)) {
+                return false;                            // roof, floor or sky - not a trunk
+            }
+        }
+        return false;
     }
 
     /**
      * Harvest a listed block and schedule its return.
      *
-     * <p>The event is left <em>uncancelled</em> so the rest of the server sees a real break. Runs
-     * late, and only reaches blocks {@link #onBreakDeny} allowed through — so by here the break is
-     * definitely a harvest, and everything that watched it happen was right to.
+     * <p>Runs late and deliberately <strong>not</strong> {@code ignoreCancelled}. A map like this
+     * denies build across the whole world, so by the time the event gets here the protection plugin
+     * has almost always cancelled it — and a handler that skipped cancelled events would simply
+     * never run. Un-cancelling is the entire point of the plugin: the block list is the permission,
+     * and this is where it is granted.
+     *
+     * <p>That means the refusals in {@link #onBreakDeny} can no longer be relied on to have removed
+     * anything, since a cancelled event still arrives here. Every one of them is re-checked below
+     * before the event is revived, or a block that was refused for being unripe or still pending
+     * would be un-cancelled right back into a harvest.
+     *
+     * <p>Note this overrides <em>any</em> plugin's cancellation, not only the world protection's.
+     * That is unavoidable for a plugin whose job is to reopen a protected area, but it does mean a
+     * listed block inside a zone cannot be protected from harvesting by something else.
      *
      * <h2>Why an empty drop list means "leave it alone"</h2>
      *
@@ -102,7 +151,7 @@ public final class RegenListener implements Listener {
      * vanilla drops, so nothing multiplies them. Use it where that is the point, not as a throttle;
      * {@code regen-seconds} throttles without lying to the rest of the server.
      */
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void onBreak(BlockBreakEvent event) {
         Block block = event.getBlock();
         Zone zone = plugin.zoneAt(block);
@@ -117,6 +166,18 @@ public final class RegenListener implements Listener {
         if (rule == null) {
             return;                                      // refused already; nothing to harvest
         }
+        if (plugin.regen().isPending(block)) {
+            return;                                      // refused already; still coming back
+        }
+        if (rule.requireMature() && !isMature(block)) {
+            return;                                      // refused already; not grown yet
+        }
+        if (rule.requireLeaves() && !partOfTree(block)) {
+            return;                                      // refused already; a build, not a tree
+        }
+
+        // A genuine harvest. Revive it past the world's protection - see above.
+        event.setCancelled(false);
 
         plugin.regen().harvest(block, zone.regenMillis());
         if (rule.drops().isEmpty()) {

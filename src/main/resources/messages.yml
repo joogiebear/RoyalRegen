@@ -9,6 +9,10 @@ not-grown: "&7That isn't ready to harvest yet."
 # Shown when breaking something in a zone that isn't on its harvest list.
 not-harvestable: "&cYou can only harvest crops here."
 
+# Shown when a log has 'require-leaves' and isn't part of a living tree —
+# i.e. someone tried to take a wall built from the same log a tree is made of.
+not-a-tree: "&7You can only fell living trees."
+
 # Shown when trying to place a block inside a zone.
 no-building: "&cYou can't build here."
 

@@ -21,12 +21,21 @@ import java.util.logging.Logger;
  */
 public final class Zone {
 
-    /** What one harvestable block gives, and whether it has to be grown first. */
-    public record Rule(List<ItemStack> drops, boolean requireMature) {
+    /**
+     * What one harvestable block gives, and the conditions on taking it.
+     *
+     * @param requireMature crops only — refuses a plant that has not finished growing
+     * @param requireLeaves logs only — refuses a log that is not part of a living tree, which is
+     *                      what makes a world-scoped lumber zone safe on a built map: the trees are
+     *                      harvestable and the walls made of the same log are not
+     */
+    public record Rule(List<ItemStack> drops, boolean requireMature, boolean requireLeaves) {
     }
 
     private final String id;
     private final String world;
+    /** True when the zone has no corners and covers its whole world. */
+    private final boolean wholeWorld;
     private final int minX;
     private final int minY;
     private final int minZ;
@@ -40,11 +49,13 @@ public final class Zone {
     private final String discoveryTitle;
     private final String discoverySubtitle;
 
-    private Zone(String id, String world, int minX, int minY, int minZ, int maxX, int maxY, int maxZ,
+    private Zone(String id, String world, boolean wholeWorld,
+                 int minX, int minY, int minZ, int maxX, int maxY, int maxZ,
                  long regenMillis, Map<Material, Rule> rules, String displayName, boolean announce,
                  String discoveryTitle, String discoverySubtitle) {
         this.id = id;
         this.world = world;
+        this.wholeWorld = wholeWorld;
         this.minX = minX;
         this.minY = minY;
         this.minZ = minZ;
@@ -66,10 +77,17 @@ public final class Zone {
             logger.warning("Zone '" + id + "' has no world — skipping it.");
             return null;
         }
+        // Corners are optional. Omitting both makes the zone cover its whole world, which is what you
+        // want for something like crops: they grow everywhere on a map and are never structural, so
+        // there is no meaningful cuboid to draw around them. Give corners to anything that IS a
+        // building material — logs and stone are walls as often as they are scenery, and a
+        // world-scoped zone would let players harvest the map itself.
         ConfigurationSection min = sec.getConfigurationSection("min");
         ConfigurationSection max = sec.getConfigurationSection("max");
-        if (min == null || max == null) {
-            logger.warning("Zone '" + id + "' needs both a min and a max corner — skipping it.");
+        boolean wholeWorld = min == null && max == null;
+        if (!wholeWorld && (min == null || max == null)) {
+            logger.warning("Zone '" + id + "' has only one corner — give it both, or neither for the"
+                    + " whole world. Skipping it.");
             return null;
         }
         ConfigurationSection blocks = sec.getConfigurationSection("blocks");
@@ -97,7 +115,8 @@ public final class Zone {
                 }
             }
             boolean mature = rule == null || rule.getBoolean("require-mature", true);
-            rules.put(material, new Rule(List.copyOf(drops), mature));
+            boolean leaves = rule != null && rule.getBoolean("require-leaves", false);
+            rules.put(material, new Rule(List.copyOf(drops), mature, leaves));
         }
         if (rules.isEmpty()) {
             logger.warning("Zone '" + id + "' had no usable blocks — skipping it.");
@@ -110,7 +129,11 @@ public final class Zone {
         boolean announce = disc == null || disc.getBoolean("enabled", true);
         String title = disc != null ? disc.getString("title", "&6" + display) : "&6" + display;
         String subtitle = disc != null ? disc.getString("subtitle", "&7Discovered") : "&7Discovered";
-        return new Zone(id, world,
+        if (wholeWorld) {
+            return new Zone(id, world, true, 0, 0, 0, 0, 0, 0,
+                    seconds * 1000L, rules, display, announce, title, subtitle);
+        }
+        return new Zone(id, world, false,
                 Math.min(min.getInt("x"), max.getInt("x")), Math.min(min.getInt("y"), max.getInt("y")),
                 Math.min(min.getInt("z"), max.getInt("z")), Math.max(min.getInt("x"), max.getInt("x")),
                 Math.max(min.getInt("y"), max.getInt("y")), Math.max(min.getInt("z"), max.getInt("z")),
@@ -155,6 +178,9 @@ public final class Zone {
         if (!block.getWorld().getName().equalsIgnoreCase(world)) {
             return false;
         }
+        if (wholeWorld) {
+            return true;
+        }
         int x = block.getX();
         int y = block.getY();
         int z = block.getZ();
@@ -162,9 +188,13 @@ public final class Zone {
     }
 
     public boolean contains(Location location) {
-        return location.getWorld() != null
-                && location.getWorld().getName().equalsIgnoreCase(world)
-                && location.getBlockX() >= minX && location.getBlockX() <= maxX
+        if (location.getWorld() == null || !location.getWorld().getName().equalsIgnoreCase(world)) {
+            return false;
+        }
+        if (wholeWorld) {
+            return true;
+        }
+        return location.getBlockX() >= minX && location.getBlockX() <= maxX
                 && location.getBlockY() >= minY && location.getBlockY() <= maxY
                 && location.getBlockZ() >= minZ && location.getBlockZ() <= maxZ;
     }
