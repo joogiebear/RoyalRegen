@@ -28,8 +28,13 @@ public final class Zone {
      * @param requireLeaves logs only — refuses a log that is not part of a living tree, which is
      *                      what makes a world-scoped lumber zone safe on a built map: the trees are
      *                      harvestable and the walls made of the same log are not
+     * @param regenMillis   how long this block takes to come back, defaulting to the zone's own
+     *                      timer. Per-block because value varies far more than location does: a
+     *                      mine holds coal and diamond in the same stone, and zones cannot overlap,
+     *                      so the only way to price them differently is here
      */
-    public record Rule(List<ItemStack> drops, boolean requireMature, boolean requireLeaves) {
+    public record Rule(List<ItemStack> drops, boolean requireMature, boolean requireLeaves,
+                       long regenMillis) {
     }
 
     private final String id;
@@ -97,6 +102,8 @@ public final class Zone {
             return null;
         }
 
+        int seconds = Math.max(1, sec.getInt("regen-seconds", 45));
+
         Map<Material, Rule> rules = new LinkedHashMap<>();
         for (String key : blocks.getKeys(false)) {
             Material material = material(key);
@@ -116,14 +123,16 @@ public final class Zone {
             }
             boolean mature = rule == null || rule.getBoolean("require-mature", true);
             boolean leaves = rule != null && rule.getBoolean("require-leaves", false);
-            rules.put(material, new Rule(List.copyOf(drops), mature, leaves));
+            long ruleMillis = rule != null && rule.isInt("regen-seconds")
+                    ? Math.max(1, rule.getInt("regen-seconds")) * 1000L
+                    : seconds * 1000L;
+            rules.put(material, new Rule(List.copyOf(drops), mature, leaves, ruleMillis));
         }
         if (rules.isEmpty()) {
             logger.warning("Zone '" + id + "' had no usable blocks — skipping it.");
             return null;
         }
 
-        int seconds = Math.max(1, sec.getInt("regen-seconds", 45));
         String display = sec.getString("display-name", "&f" + id);
         ConfigurationSection disc = sec.getConfigurationSection("discovery");
         boolean announce = disc == null || disc.getBoolean("enabled", true);

@@ -114,7 +114,7 @@ public final class RegenListener implements Listener {
      * Both err toward "harvestable" only where someone deliberately put the two together, and the
      * block returns on the regen timer regardless.
      */
-    private static boolean partOfTree(Block block) {
+    private boolean partOfTree(Block block) {
         Set<Block> seen = new HashSet<>();
         Deque<Block> queue = new ArrayDeque<>();
         queue.add(block);
@@ -136,7 +136,12 @@ public final class RegenListener implements Listener {
                         if (Tag.LEAVES.isTagged(type)) {
                             return true;                 // reached a canopy
                         }
-                        if (Tag.LOGS.isTagged(type) && seen.add(next)) {
+                        // A block this plugin is already regenerating is still part of the tree -
+                        // it is air only because someone just harvested it, and it is coming back.
+                        // Without this, felling from anywhere but the base severs the trunk from
+                        // its canopy and every log below the gap is refused until the timer runs.
+                        if ((Tag.LOGS.isTagged(type) || plugin.regen().isPending(next))
+                                && seen.add(next)) {
                             queue.add(next);
                         }
                     }
@@ -213,7 +218,7 @@ public final class RegenListener implements Listener {
         // A genuine harvest. Revive it past the world's protection - see above.
         event.setCancelled(false);
 
-        plugin.regen().harvest(block, zone.regenMillis());
+        plugin.regen().harvest(block, rule.regenMillis());
         if (rule.drops().isEmpty()) {
             return;                                      // vanilla drops stand — see above
         }
