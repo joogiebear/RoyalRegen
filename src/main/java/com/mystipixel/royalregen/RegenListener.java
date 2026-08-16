@@ -5,6 +5,7 @@ import org.bukkit.Material;
 import org.bukkit.Tag;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.Ageable;
+import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -12,6 +13,8 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.entity.EntityPlaceEvent;
+import org.bukkit.event.hanging.HangingPlaceEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -125,6 +128,51 @@ public final class RegenListener implements Listener {
      * Both err toward "harvestable" only where someone deliberately put the two together, and the
      * block returns on the regen timer regardless.
      */
+    /**
+     * Nothing may be hung inside a zone either.
+     *
+     * <p>Item frames and paintings are entities, not blocks, so the block placement rule above never
+     * sees them. On a map whose protection denies breaking them, being able to put them up is worse
+     * than it sounds: the decoration becomes permanent, and only someone who bypasses protection can
+     * take it down again.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onHangingPlace(HangingPlaceEvent event) {
+        Player player = event.getPlayer();
+        if (player == null || player.getGameMode() == GameMode.CREATIVE) {
+            return;
+        }
+        if (plugin.zoneAt(event.getEntity().getLocation().getBlock()) != null) {
+            event.setCancelled(true);
+            plugin.messages().send(player, "no-building");
+        }
+    }
+
+    /**
+     * Armour stands, for the same reason.
+     *
+     * <p>Handled separately because they are not hanging entities. This is also the only protection
+     * they get: WorldGuard has no armour stand flag, so once one exists anybody can break it. Not
+     * placing them is the whole defence.
+     *
+     * <p>Deliberately limited to armour stands. {@code EntityPlaceEvent} also covers boats, minecarts
+     * and end crystals, and a boat is transport rather than decoration.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onEntityPlace(EntityPlaceEvent event) {
+        if (event.getEntityType() != EntityType.ARMOR_STAND) {
+            return;
+        }
+        Player player = event.getPlayer();
+        if (player == null || player.getGameMode() == GameMode.CREATIVE) {
+            return;
+        }
+        if (plugin.zoneAt(event.getBlock()) != null) {
+            event.setCancelled(true);
+            plugin.messages().send(player, "no-building");
+        }
+    }
+
     /**
      * Bring the rest of a tree down, a few logs per tick.
      *
