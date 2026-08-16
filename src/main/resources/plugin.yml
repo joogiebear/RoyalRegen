@@ -16,3 +16,6 @@ permissions:
   royalregen.admin:
     description: Reload RoyalRegen and view its status.
     default: op
+  royalregen.fell:
+    description: Bring a whole tree down by breaking one of its logs.
+    default: false

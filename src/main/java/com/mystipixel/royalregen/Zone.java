@@ -32,9 +32,11 @@ public final class Zone {
      *                      timer. Per-block because value varies far more than location does: a
      *                      mine holds coal and diamond in the same stone, and zones cannot overlap,
      *                      so the only way to price them differently is here
+     * @param fell          logs only — harvesting one brings the rest of the connected tree down
+     *                      with it, spread over several ticks
      */
     public record Rule(List<ItemStack> drops, boolean requireMature, boolean requireLeaves,
-                       long regenMillis) {
+                       long regenMillis, boolean fell) {
     }
 
     private final String id;
@@ -126,7 +128,8 @@ public final class Zone {
             long ruleMillis = rule != null && rule.isInt("regen-seconds")
                     ? Math.max(1, rule.getInt("regen-seconds")) * 1000L
                     : seconds * 1000L;
-            rules.put(material, new Rule(List.copyOf(drops), mature, leaves, ruleMillis));
+            boolean fell = rule != null && rule.getBoolean("fell", false);
+            rules.put(material, new Rule(List.copyOf(drops), mature, leaves, ruleMillis, fell));
         }
         if (rules.isEmpty()) {
             logger.warning("Zone '" + id + "' had no usable blocks — skipping it.");

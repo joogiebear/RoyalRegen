@@ -17,9 +17,13 @@ import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 
+import org.bukkit.scheduler.BukkitRunnable;
+
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -40,6 +44,13 @@ public final class RegenListener implements Listener {
     private static final int TREE_SCAN_LIMIT = 512;
 
     private final RoyalRegenPlugin plugin;
+
+    /**
+     * Set while this listener is breaking a block itself, so the felled logs do not each fell a
+     * tree of their own. Bukkit is single threaded, so a plain flag is enough - the scheduled task
+     * and the events it causes all run on the main thread within one tick.
+     */
+    private boolean felling;
 
     public RegenListener(RoyalRegenPlugin plugin) {
         this.plugin = plugin;
@@ -114,6 +125,93 @@ public final class RegenListener implements Listener {
      * Both err toward "harvestable" only where someone deliberately put the two together, and the
      * block returns on the regen timer regardless.
      */
+    /**
+     * Bring the rest of a tree down, a few logs per tick.
+     *
+     * <p>Spreading the work is the entire point. Felling a 150-log tree in one tick fires 150 block
+     * break effects at once, which the client renders as a single distorted crack — the reason this
+     * lives here rather than in a vein-mining effect, which has no way to pace itself.
+     *
+     * <p>Each log is broken <em>through the player</em>, so a real {@code BlockBreakEvent} fires for
+     * every one. That is what keeps skills, jobs and this plugin's own regeneration working on the
+     * whole tree instead of only the log that was swung at. Breaking the blocks directly would be
+     * silent and instant, and would also make the rest of the tree vanish for good.
+     *
+     * <p>Gated on a permission rather than on the tool. This plugin has no dependency on the item
+     * suite and cannot tell one axe from another; a permission is something the server already
+     * knows how to grant.
+     */
+    private void fellTree(Player player, Block origin) {
+        String permission = plugin.getConfig().getString("felling.permission", "royalregen.fell");
+        if (permission != null && !permission.isBlank() && !player.hasPermission(permission)) {
+            return;
+        }
+        int limit = Math.max(1, plugin.getConfig().getInt("felling.limit", 250));
+        int perTick = Math.max(1, plugin.getConfig().getInt("felling.per-tick", 6));
+
+        List<Block> logs = connectedLogs(origin, limit);
+        if (logs.isEmpty()) {
+            return;
+        }
+
+        new BukkitRunnable() {
+            private int index = 0;
+
+            @Override
+            public void run() {
+                if (!player.isOnline()) {
+                    cancel();
+                    return;
+                }
+                int broken = 0;
+                while (index < logs.size() && broken < perTick) {
+                    Block next = logs.get(index++);
+                    if (!Tag.LOGS.isTagged(next.getType())) {
+                        continue;                        // already gone, or regenerated under us
+                    }
+                    felling = true;
+                    try {
+                        player.breakBlock(next);
+                    } finally {
+                        felling = false;
+                    }
+                    broken++;
+                }
+                if (index >= logs.size()) {
+                    cancel();
+                }
+            }
+        }.runTaskTimer(plugin, 1L, 1L);
+    }
+
+    /** Logs connected to this one, upward and sideways, nearest first. Excludes the origin. */
+    private static List<Block> connectedLogs(Block origin, int limit) {
+        List<Block> found = new ArrayList<>();
+        Set<Block> seen = new HashSet<>();
+        Deque<Block> queue = new ArrayDeque<>();
+        queue.add(origin);
+        seen.add(origin);
+
+        while (!queue.isEmpty() && found.size() < limit) {
+            Block current = queue.poll();
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = 0; dy <= 1; dy++) {
+                    for (int dz = -1; dz <= 1; dz++) {
+                        if (dx == 0 && dy == 0 && dz == 0) {
+                            continue;
+                        }
+                        Block next = current.getRelative(dx, dy, dz);
+                        if (Tag.LOGS.isTagged(next.getType()) && seen.add(next)) {
+                            found.add(next);
+                            queue.add(next);
+                        }
+                    }
+                }
+            }
+        }
+        return found;
+    }
+
     private boolean partOfTree(Block block) {
         Set<Block> seen = new HashSet<>();
         Deque<Block> queue = new ArrayDeque<>();
@@ -219,6 +317,10 @@ public final class RegenListener implements Listener {
         event.setCancelled(false);
 
         plugin.regen().harvest(block, rule.regenMillis());
+
+        if (rule.fell() && !felling) {
+            fellTree(player, block);
+        }
         if (rule.drops().isEmpty()) {
             return;                                      // vanilla drops stand — see above
         }
