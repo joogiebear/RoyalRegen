@@ -1,3 +1,14 @@
+## 2026.34.0 — 2026-08-21
+
+### ✨ Features
+- deny hanging entities and armour stands inside a zone (`fa2c53d`)
+- fell a tree over several ticks, gated on a permission (`b6d16f3`)
+- per-block regen-seconds, overriding the zone timer (`10c1c67`)
+- world-scoped zones, require-leaves, and harvesting under a build deny (`d0bf166`)
+
+### 🐛 Fixes
+- follow a built trunk to its canopy instead of straight up (`065a83c`)
+
 ## 2026.32.0 — 2026-08-07
 
 ### ✨ Features
