@@ -10,7 +10,7 @@ softdepend:
 commands:
   royalregen:
     description: RoyalRegen admin tools.
-    usage: /royalregen reload|status
+    usage: /royalregen reload|status|pos1|pos2|create <id> [regen-seconds]
     aliases: [rregen, regen]
 permissions:
   royalregen.admin:
