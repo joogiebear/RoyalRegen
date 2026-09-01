@@ -107,28 +107,6 @@ public final class RegenListener implements Listener {
     }
 
     /**
-     * Whether a log belongs to a living tree rather than something built out of the same block.
-     *
-     * <p>Spreads through connected logs looking for a canopy. An earlier version walked straight up
-     * and stopped at the first non-log, which is fine for a generated tree but wrong for a built
-     * one: hand-made trunks lean, taper, branch and stand two or three blocks thick, so the column
-     * directly above any given log is often air long before the leaves start. Every such tree was
-     * refused.
-     *
-     * <p>A radius check around the block would fail differently and worse — it has to pick between
-     * a radius too small for a trunk standing twenty blocks below its lowest leaf, and one so large
-     * that any wall near a tree reads as part of it.
-     *
-     * <p>The spread never goes downward. Canopies sit above trunks, so upward and sideways is all a
-     * tree needs, while a wall searched downward would reach the ground and wander into whatever
-     * else is connected there.
-     *
-     * <p>It remains a heuristic, because Minecraft cannot tell us a log's purpose. A post under a
-     * decorative canopy reads as a tree, and a wall built hard against a real trunk inherits it.
-     * Both err toward "harvestable" only where someone deliberately put the two together, and the
-     * block returns on the regen timer regardless.
-     */
-    /**
      * Nothing may be hung inside a zone either.
      *
      * <p>Item frames and paintings are entities, not blocks, so the block placement rule above never
@@ -260,6 +238,28 @@ public final class RegenListener implements Listener {
         return found;
     }
 
+    /**
+     * Whether a log belongs to a living tree rather than something built out of the same block.
+     *
+     * <p>Spreads through connected logs looking for a canopy. An earlier version walked straight up
+     * and stopped at the first non-log, which is fine for a generated tree but wrong for a built
+     * one: hand-made trunks lean, taper, branch and stand two or three blocks thick, so the column
+     * directly above any given log is often air long before the leaves start. Every such tree was
+     * refused.
+     *
+     * <p>A radius check around the block would fail differently and worse — it has to pick between
+     * a radius too small for a trunk standing twenty blocks below its lowest leaf, and one so large
+     * that any wall near a tree reads as part of it.
+     *
+     * <p>The spread never goes downward. Canopies sit above trunks, so upward and sideways is all a
+     * tree needs, while a wall searched downward would reach the ground and wander into whatever
+     * else is connected there.
+     *
+     * <p>It remains a heuristic, because Minecraft cannot tell us a log's purpose. A post under a
+     * decorative canopy reads as a tree, and a wall built hard against a real trunk inherits it.
+     * Both err toward "harvestable" only where someone deliberately put the two together, and the
+     * block returns on the regen timer regardless.
+     */
     private boolean partOfTree(Block block) {
         Set<Block> seen = new HashSet<>();
         Deque<Block> queue = new ArrayDeque<>();
