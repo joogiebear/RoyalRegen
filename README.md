@@ -121,4 +121,4 @@ on a well-priced crop is.
 mvn clean package     # target/RoyalRegen.jar
 ```
 
-Requires JDK 25 to build (paper-api 26.2 ships Java 25 bytecode); runs on Java 21+.
+Requires Paper 26.2 or newer to run, and JDK 25 to build (paper-api 26.2 ships Java 25 bytecode).
