@@ -46,6 +46,9 @@ public final class RegenListener implements Listener {
      */
     private static final int TREE_SCAN_LIMIT = 512;
 
+    /** Edit a zone's protected blocks without switching gamemode — same shape as the suite's others. */
+    public static final String BYPASS = "royalregen.bypass";
+
     private final RoyalRegenPlugin plugin;
 
     /**
@@ -79,7 +82,7 @@ public final class RegenListener implements Listener {
             return;
         }
         Player player = event.getPlayer();
-        if (player.getGameMode() == GameMode.CREATIVE) {
+        if (editing(player)) {
             return;                                      // building, not farming
         }
 
@@ -117,7 +120,7 @@ public final class RegenListener implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onHangingPlace(HangingPlaceEvent event) {
         Player player = event.getPlayer();
-        if (player == null || player.getGameMode() == GameMode.CREATIVE) {
+        if (player == null || editing(player)) {
             return;
         }
         if (plugin.zoneAt(event.getEntity().getLocation().getBlock()) != null) {
@@ -142,13 +145,18 @@ public final class RegenListener implements Listener {
             return;
         }
         Player player = event.getPlayer();
-        if (player == null || player.getGameMode() == GameMode.CREATIVE) {
+        if (player == null || editing(player)) {
             return;
         }
         if (plugin.zoneAt(event.getBlock()) != null) {
             event.setCancelled(true);
             plugin.messages().send(player, "no-building");
         }
+    }
+
+    /** Creative players and bypass holders are editing the map, not farming it. */
+    private static boolean editing(Player player) {
+        return player.getGameMode() == GameMode.CREATIVE || player.hasPermission(BYPASS);
     }
 
     /**
@@ -344,8 +352,8 @@ public final class RegenListener implements Listener {
             return;
         }
         Player player = event.getPlayer();
-        if (player.getGameMode() == GameMode.CREATIVE) {
-            return;
+        if (editing(player)) {
+            return;                                      // their break is an edit, not a harvest
         }
         Zone.Rule rule = zone.rule(block.getType());
         if (rule == null) {
@@ -387,7 +395,7 @@ public final class RegenListener implements Listener {
      */
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onPlace(BlockPlaceEvent event) {
-        if (event.getPlayer().getGameMode() == GameMode.CREATIVE) {
+        if (editing(event.getPlayer())) {
             return;
         }
         if (plugin.zoneAt(event.getBlock()) != null) {

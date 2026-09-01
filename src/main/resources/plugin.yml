@@ -19,3 +19,6 @@ permissions:
   royalregen.fell:
     description: Bring a whole tree down by breaking one of its logs.
     default: false
+  royalregen.bypass:
+    description: Edit a zone's protected blocks without switching to creative.
+    default: op
