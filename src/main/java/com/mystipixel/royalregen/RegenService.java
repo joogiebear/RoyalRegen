@@ -11,8 +11,9 @@ import java.util.Map;
 /**
  * Remembers what a harvested block used to be and puts it back.
  *
- * <p>Restores are kept in memory in insertion order, which is also due order because every zone uses a
- * fixed delay — so the tick only has to look at the front of the map rather than scanning all of it.
+ * <p>Restores are kept in memory and scanned once a second. Insertion order is NOT due order — a
+ * block's rule can set its own regen time, so a slow block harvested first must not hold up a fast
+ * one harvested after it.
  *
  * <p>Everything here runs on the server thread.
  */
@@ -76,7 +77,7 @@ public final class RegenService {
         while (it.hasNext()) {
             var entry = it.next();
             if (now < entry.getValue().dueAt()) {
-                break;                       // insertion order is due order — nothing later is ready
+                continue;                    // per-block regen times: a later entry can be due sooner
             }
             // Only forget it once it is actually back. A block in an unloaded chunk is retried on a
             // later tick; dropping it here would leave a permanent hole in the farm.

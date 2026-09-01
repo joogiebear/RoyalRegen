@@ -41,8 +41,8 @@ public final class RoyalRegenPlugin extends JavaPlugin {
             getCommand("royalregen").setTabCompleter(command);
         }
 
-        // One second is plenty: regen delays are measured in tens of seconds, and this walks only the
-        // front of the queue rather than every pending block.
+        // One second is plenty: regen delays are measured in tens of seconds, and a full scan of the
+        // pending map is cheap at the sizes a farm produces.
         getServer().getScheduler().runTaskTimer(this, regen::tick, 20L, 20L);
 
         if (zones.isEmpty()) {
