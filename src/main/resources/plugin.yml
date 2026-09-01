@@ -1,7 +1,7 @@
 name: RoyalRegen
 version: ${version}
 main: com.mystipixel.royalregen.RoyalRegenPlugin
-api-version: '1.21'
+api-version: '26.2'
 author: Mystipixel
 description: Regenerating blocks in defined zones, so farms and mines can be harvested without being destroyed.
 # Loaded after WorldGuard where present, so this plugin's listener can carve out its exception.
