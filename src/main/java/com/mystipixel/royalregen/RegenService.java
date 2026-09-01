@@ -25,6 +25,9 @@ public final class RegenService {
     private final RoyalRegenPlugin plugin;
     private final Map<Location, Pending> pending = new LinkedHashMap<>();
 
+    /** Set on every mutation of {@link #pending}; the write-behind save only touches disk when true. */
+    private boolean dirty;
+
     public RegenService(RoyalRegenPlugin plugin) {
         this.plugin = plugin;
     }
@@ -51,6 +54,7 @@ public final class RegenService {
         }
         BlockData original = block.getBlockData();
         pending.put(key, new Pending(original, System.currentTimeMillis() + regenMillis));
+        dirty = true;
 
         // A tick later, because the break event is left uncancelled so other plugins can see it —
         // which means the server sets this block to air immediately after this method returns, and
@@ -83,6 +87,7 @@ public final class RegenService {
             // later tick; dropping it here would leave a permanent hole in the farm.
             if (restore(entry.getKey(), entry.getValue().original())) {
                 it.remove();
+                dirty = true;
             }
         }
     }
@@ -107,7 +112,84 @@ public final class RegenService {
             }
         }
         pending.clear();
+        dirty = true;
         return n;
+    }
+
+    // ── crash persistence ────────────────────────────────────────────────────────
+
+    /**
+     * Write the pending map to disk if it changed since the last save.
+     *
+     * <p>{@link #restoreAll} covers a clean stop, but a crash used to take the map with it — every
+     * harvested block whose timer died with the process became a permanent hole in the farm. This is
+     * the same reasoning as RoyalTrade's escrow file: a few tens of small rows every few seconds is
+     * nothing next to a farm that never grows back.
+     */
+    public void savePendingIfDirty(java.io.File file) {
+        if (!dirty) {
+            return;
+        }
+        org.bukkit.configuration.file.YamlConfiguration out =
+                new org.bukkit.configuration.file.YamlConfiguration();
+        java.util.List<String> rows = new java.util.ArrayList<>(pending.size());
+        for (var entry : pending.entrySet()) {
+            Location at = entry.getKey();
+            if (at.getWorld() == null) {
+                continue;
+            }
+            rows.add(at.getWorld().getName() + "|" + at.getBlockX() + "|" + at.getBlockY() + "|"
+                    + at.getBlockZ() + "|" + entry.getValue().dueAt() + "|"
+                    + entry.getValue().original().getAsString());
+        }
+        out.set("pending", rows);
+        try {
+            out.save(file);
+            dirty = false;
+        } catch (java.io.IOException e) {
+            plugin.getLogger().warning("Could not save pending.yml — a crash from here loses "
+                    + rows.size() + " pending restore(s): " + e.getMessage());
+        }
+    }
+
+    /**
+     * Load restores left behind by an unclean shutdown, queueing them as already-due so the next
+     * tick puts them back (with its usual unloaded-chunk retry). Entries for worlds that are not
+     * loaded are dropped with a warning rather than kept as unkeyable ghosts.
+     */
+    public void loadPending(java.io.File file) {
+        if (!file.exists()) {
+            return;
+        }
+        int queued = 0;
+        for (String row : org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(file)
+                .getStringList("pending")) {
+            String[] parts = row.split("\\|", 6);
+            if (parts.length != 6) {
+                plugin.getLogger().warning("pending.yml has a malformed row: " + row);
+                continue;
+            }
+            org.bukkit.World world = plugin.getServer().getWorld(parts[0]);
+            if (world == null) {
+                plugin.getLogger().warning("pending.yml row for unloaded world '" + parts[0]
+                        + "' dropped — that block will not regenerate: " + row);
+                continue;
+            }
+            try {
+                Location at = new Location(world, Integer.parseInt(parts[1]),
+                        Integer.parseInt(parts[2]), Integer.parseInt(parts[3]));
+                pending.put(at, new Pending(plugin.getServer().createBlockData(parts[5]),
+                        Long.parseLong(parts[4])));
+                queued++;
+            } catch (IllegalArgumentException bad) {
+                plugin.getLogger().warning("pending.yml row could not be parsed: " + row);
+            }
+        }
+        if (queued > 0) {
+            dirty = true;
+            plugin.getLogger().info("Recovered " + queued + " pending restore(s) from an unclean "
+                    + "shutdown; they return on their timers (or immediately if already due).");
+        }
     }
 
     /** Returns false when the chunk isn't loaded, so the caller knows to try again later. */

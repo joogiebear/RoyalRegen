@@ -45,6 +45,12 @@ public final class RoyalRegenPlugin extends JavaPlugin {
         // pending map is cheap at the sizes a farm produces.
         getServer().getScheduler().runTaskTimer(this, regen::tick, 20L, 20L);
 
+        // Crash safety: recover restores an unclean shutdown left behind, then keep the file in step
+        // (write-behind, only when something changed). restoreAll() still covers a clean stop.
+        java.io.File pendingFile = new java.io.File(getDataFolder(), "pending.yml");
+        regen.loadPending(pendingFile);
+        getServer().getScheduler().runTaskTimer(this, () -> regen.savePendingIfDirty(pendingFile), 100L, 100L);
+
         if (zones.isEmpty()) {
             // The shipped config is two disabled examples, since coordinates only mean something on
             // the map they were measured on. Say so, rather than looking quietly broken.
@@ -65,6 +71,8 @@ public final class RoyalRegenPlugin extends JavaPlugin {
             if (restored > 0) {
                 getLogger().info("Restored " + restored + " harvested block(s) before shutdown.");
             }
+            // The map is empty now; writing it out empties pending.yml so the next start recovers nothing.
+            regen.savePendingIfDirty(new java.io.File(getDataFolder(), "pending.yml"));
         }
     }
 
