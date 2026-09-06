@@ -1,3 +1,18 @@
+## 2026.36.0 — 2026-09-06
+
+### ✨ Features
+- report anonymous usage to bStats (`a9282fe`)
+- in-game zone creation (`10e000d`)
+- royalregen.bypass permission (`bf200fa`)
+- crash-safe pending restores (`1210c73`)
+
+### 🐛 Fixes
+- restore blocks with shorter per-block regen times on schedule (`8e6e115`)
+
+### 📝 Documentation
+- state the Paper 26.2-or-newer requirement (`c227e93`)
+- reattach the tree-heuristic javadoc to partOfTree (`e2c64af`)
+
 ## 2026.34.0 — 2026-08-21
 
 ### ✨ Features
