@@ -115,6 +115,13 @@ on a well-priced crop is.
 
 ---
 
+## Metrics
+
+Reports anonymous usage to [bStats](https://bstats.org/plugin/bukkit/RoyalRegen/33889). Turn it off for
+the whole server in `plugins/bStats/config.yml`.
+
+---
+
 ## Building
 
 ```bash
