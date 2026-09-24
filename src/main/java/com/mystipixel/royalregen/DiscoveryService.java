@@ -2,6 +2,7 @@ package com.mystipixel.royalregen;
 
 import com.mystipixel.royalregen.util.Text;
 import net.kyori.adventure.title.Title;
+import org.bukkit.Location;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
@@ -39,9 +40,12 @@ public final class DiscoveryService {
         load();
     }
 
-    /** Called as a player changes block. Cheap when nothing has changed, which is almost always. */
-    public void update(Player player) {
-        Zone zone = plugin.zoneAt(player.getLocation().getBlock());
+    /**
+     * Called as a player changes block, joins, or teleports, with where they are now (or are about to
+     * be). Cheap when nothing has changed, which is almost always.
+     */
+    public void update(Player player, Location at) {
+        Zone zone = plugin.zoneAt(at);
         String now = zone == null ? null : zone.id();
         String before = currentZone.get(player.getUniqueId());
         if (java.util.Objects.equals(now, before)) {
@@ -62,8 +66,7 @@ public final class DiscoveryService {
         Set<String> found = discovered.computeIfAbsent(player.getUniqueId(), id -> new HashSet<>());
         boolean first = found.add(zone.id());
         if (first) {
-            dirty = true;
-            save();
+            dirty = true;                               // written by the next periodic save()
         }
         String heading = first ? zone.discoveryTitle() : zone.displayName();
         String sub = first ? zone.discoverySubtitle() : "";
@@ -101,8 +104,9 @@ public final class DiscoveryService {
     /**
      * Persist discoveries.
      *
-     * <p>Written on each new find rather than only on shutdown: a discovery a player will never see
-     * again is worth a small file write, and a crash shouldn't quietly undo it.
+     * <p>Called every few seconds and on shutdown, and only writes when something new was found. It
+     * used to write the whole file on the main thread for every single find, which grows with the
+     * player count; batching keeps a crash from undoing more than the last few seconds.
      */
     public void save() {
         if (!dirty) {

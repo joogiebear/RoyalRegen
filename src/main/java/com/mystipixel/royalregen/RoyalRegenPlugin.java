@@ -4,6 +4,7 @@ import com.mystipixel.royalregen.command.RoyalRegenCommand;
 import com.mystipixel.royalregen.message.MessageManager;
 import org.bstats.bukkit.Metrics;
 import org.bstats.charts.SimplePie;
+import org.bukkit.Location;
 import org.bukkit.block.Block;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -29,6 +30,7 @@ public final class RoyalRegenPlugin extends JavaPlugin {
     private RegenService regen;
     private MessageManager messages;
     private DiscoveryService discovery;
+    private boolean overrideProtection = true;
 
     @Override
     public void onEnable() {
@@ -45,6 +47,7 @@ public final class RoyalRegenPlugin extends JavaPlugin {
             getCommand("royalregen").setExecutor(command);
             getCommand("royalregen").setTabCompleter(command);
         }
+        getServer().getPluginManager().registerEvents(command, this);
 
         // One second is plenty: regen delays are measured in tens of seconds, and a full scan of the
         // pending map is cheap at the sizes a farm produces.
@@ -55,6 +58,7 @@ public final class RoyalRegenPlugin extends JavaPlugin {
         java.io.File pendingFile = new java.io.File(getDataFolder(), "pending.yml");
         regen.loadPending(pendingFile);
         getServer().getScheduler().runTaskTimer(this, () -> regen.savePendingIfDirty(pendingFile), 100L, 100L);
+        getServer().getScheduler().runTaskTimer(this, discovery::save, 100L, 100L);
 
         setupMetrics();
 
@@ -78,7 +82,7 @@ public final class RoyalRegenPlugin extends JavaPlugin {
             if (restored > 0) {
                 getLogger().info("Restored " + restored + " harvested block(s) before shutdown.");
             }
-            // The map is empty now; writing it out empties pending.yml so the next start recovers nothing.
+            // Only restores for unloaded worlds are left now; writing the map out keeps exactly those.
             regen.savePendingIfDirty(new java.io.File(getDataFolder(), "pending.yml"));
         }
     }
@@ -102,6 +106,7 @@ public final class RoyalRegenPlugin extends JavaPlugin {
     /** Re-read the zones. Invalid entries are skipped with a reason rather than being fatal. */
     public void reloadZones() {
         reloadConfig();
+        overrideProtection = getConfig().getBoolean("override-protection", true);
         zones.clear();
         ConfigurationSection section = getConfig().getConfigurationSection("zones");
         if (section == null) {
@@ -130,8 +135,23 @@ public final class RoyalRegenPlugin extends JavaPlugin {
         return null;
     }
 
+    /** The zone containing this location, or null. Doesn't load the chunk to find out. */
+    public Zone zoneAt(Location location) {
+        for (Zone zone : zones) {
+            if (zone.contains(location)) {
+                return zone;
+            }
+        }
+        return null;
+    }
+
     public List<Zone> zones() {
         return zones;
+    }
+
+    /** Whether a harvest the world's protection cancelled is revived. See {@link RegenListener}. */
+    public boolean overrideProtection() {
+        return overrideProtection;
     }
 
     public RegenService regen() {

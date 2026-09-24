@@ -10,6 +10,9 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.HashMap;
@@ -20,7 +23,7 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 /** {@code /royalregen reload|status|pos1|pos2|create} — admin tools, including in-game zone creation. */
-public final class RoyalRegenCommand implements CommandExecutor, TabCompleter {
+public final class RoyalRegenCommand implements CommandExecutor, TabCompleter, Listener {
 
     /** Zone ids become config keys, so they are restricted to what a key can safely be. */
     private static final Pattern ZONE_ID = Pattern.compile("[a-z0-9_-]{1,32}");
@@ -82,7 +85,8 @@ public final class RoyalRegenCommand implements CommandExecutor, TabCompleter {
      * off the F3 screen, type them into YAML, reload) is exactly the part a command should do.
      *
      * <p>The block list is seeded from the block the admin is looking at — stand in the field, look
-     * at the wheat, create — with {@code require-mature} set when it's a crop. More blocks are added
+     * at the wheat, create — with {@code require-mature} set when it's a crop (not merely something
+     * with an age, like sugar cane). More blocks are added
      * in config, where each one's options are documented.
      */
     private void create(CommandSender sender, String[] args) {
@@ -96,6 +100,9 @@ public final class RoyalRegenCommand implements CommandExecutor, TabCompleter {
             return;
         }
         String id = args[1].toLowerCase(Locale.ROOT);
+        // Start from what is on disk now. The copy in memory is whatever the last reload read, and
+        // saving it would silently throw away any edit the admin made to config.yml since then.
+        plugin.reloadConfig();
         if (plugin.getConfig().isConfigurationSection("zones." + id)) {
             sender.sendMessage(Text.chat("&cA zone called '&e" + id + "&c' already exists in config.yml."));
             return;
@@ -140,7 +147,7 @@ public final class RoyalRegenCommand implements CommandExecutor, TabCompleter {
         cfg.set(base + ".max.z", Math.max(a.getBlockZ(), b.getBlockZ()));
         cfg.set(base + ".regen-seconds", seconds);
         String blockKey = looking.getType().getKey().toString();
-        if (looking.getBlockData() instanceof org.bukkit.block.data.Ageable) {
+        if (Zone.isCrop(looking.getType())) {
             cfg.set(base + ".blocks." + blockKey + ".require-mature", true);
         } else {
             cfg.createSection(base + ".blocks." + blockKey);
@@ -152,6 +159,13 @@ public final class RoyalRegenCommand implements CommandExecutor, TabCompleter {
                 + blockKey + "&a on a " + seconds + "s timer."));
         sender.sendMessage(Text.chat("&7Add more blocks (and drops/felling options) under &fzones."
                 + id + ".blocks&7 in config.yml, then &f/royalregen reload&7."));
+    }
+
+    /** Corners are a session's scratch work; drop them when the admin leaves. */
+    @EventHandler
+    public void onQuit(PlayerQuitEvent event) {
+        pos1.remove(event.getPlayer().getUniqueId());
+        pos2.remove(event.getPlayer().getUniqueId());
     }
 
     @Override
