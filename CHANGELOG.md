@@ -1,3 +1,25 @@
+## 2026.39.1 — 2026-09-24
+
+### ✨ Features
+- add override-protection to stop reviving cancelled breaks (`68acd4b`)
+
+### 🐛 Fixes
+- refuse /royalregen create while config.yml fails to parse (`87d6486`)
+- give every message a built-in fallback and forget corners on quit (`152f703`)
+- stop /royalregen create discarding unsaved config edits (`a23e0e7`)
+- announce zones on join, teleport and while riding (`0513810`)
+- keep tree felling inside the zone (`ca2c76d`)
+- guard zones against buckets, mob trampling and drying soil (`9c2b4cf`)
+- restore the whole stack when a cane or cactus is cut low (`bffab0e`)
+- stop a felled tree's leaves decaying inside zones (`1ec55cb`)
+- keep pending restores for worlds that load late (`5e7eec9`)
+- default require-mature on for crops only (`dd7fe1e`)
+
+### 📝 Documentation
+- bring the README in line with the plugin (`4278914`)
+- document every zone and block option in config.yml (`6ff975f`)
+- add MIT license (`281f802`)
+
 ## 2026.39.0 — 2026-09-23
 
 ### 🔧 Other
