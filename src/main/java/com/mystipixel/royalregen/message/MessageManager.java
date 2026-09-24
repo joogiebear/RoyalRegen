@@ -18,7 +18,9 @@ public final class MessageManager {
     private static final Map<String, String> DEFAULTS = Map.of(
             "prefix", "",
             "not-grown", "&7That isn't ready to harvest yet.",
+            "not-harvestable", "&cYou can only harvest crops here.",
             "not-a-tree", "&7You can only fell living trees.",
+            "no-building", "&cYou can't build here.",
             "reloaded", "&aRoyalRegen reloaded &f%zones%&a zone(s).");
 
     private final JavaPlugin plugin;

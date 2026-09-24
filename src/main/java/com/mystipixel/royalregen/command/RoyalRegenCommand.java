@@ -10,6 +10,9 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.HashMap;
@@ -20,7 +23,7 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 /** {@code /royalregen reload|status|pos1|pos2|create} — admin tools, including in-game zone creation. */
-public final class RoyalRegenCommand implements CommandExecutor, TabCompleter {
+public final class RoyalRegenCommand implements CommandExecutor, TabCompleter, Listener {
 
     /** Zone ids become config keys, so they are restricted to what a key can safely be. */
     private static final Pattern ZONE_ID = Pattern.compile("[a-z0-9_-]{1,32}");
@@ -156,6 +159,13 @@ public final class RoyalRegenCommand implements CommandExecutor, TabCompleter {
                 + blockKey + "&a on a " + seconds + "s timer."));
         sender.sendMessage(Text.chat("&7Add more blocks (and drops/felling options) under &fzones."
                 + id + ".blocks&7 in config.yml, then &f/royalregen reload&7."));
+    }
+
+    /** Corners are a session's scratch work; drop them when the admin leaves. */
+    @EventHandler
+    public void onQuit(PlayerQuitEvent event) {
+        pos1.remove(event.getPlayer().getUniqueId());
+        pos2.remove(event.getPlayer().getUniqueId());
     }
 
     @Override

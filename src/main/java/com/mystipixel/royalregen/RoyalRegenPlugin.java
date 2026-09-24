@@ -47,6 +47,7 @@ public final class RoyalRegenPlugin extends JavaPlugin {
             getCommand("royalregen").setExecutor(command);
             getCommand("royalregen").setTabCompleter(command);
         }
+        getServer().getPluginManager().registerEvents(command, this);
 
         // One second is plenty: regen delays are measured in tens of seconds, and a full scan of the
         // pending map is cheap at the sizes a farm produces.
