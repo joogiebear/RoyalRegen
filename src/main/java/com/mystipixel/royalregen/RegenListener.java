@@ -13,10 +13,15 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockFadeEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.block.LeavesDecayEvent;
+import org.bukkit.event.entity.EntityInteractEvent;
 import org.bukkit.event.entity.EntityPlaceEvent;
 import org.bukkit.event.hanging.HangingPlaceEvent;
+import org.bukkit.event.player.PlayerBucketEmptyEvent;
+import org.bukkit.event.player.PlayerBucketEvent;
+import org.bukkit.event.player.PlayerBucketFillEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -431,6 +436,62 @@ public final class RegenListener implements Listener {
         if (plugin.zoneAt(event.getBlock()) != null) {
             event.setCancelled(true);
             plugin.messages().send(event.getPlayer(), "no-building");
+        }
+    }
+
+    /**
+     * No pouring or scooping liquids inside a zone.
+     *
+     * <p>A bucket is not a {@code BlockPlaceEvent}, so the placement rule above never saw one. Poured
+     * water washes crops off their farmland without breaking them — no event, so nothing is recorded
+     * and nothing comes back — and lava does the same to anything that burns. Scooping up a farm's
+     * irrigation is the quieter version: the soil dries, the crops pop, and the field is gone for good.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onBucketEmpty(PlayerBucketEmptyEvent event) {
+        denyBucket(event);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onBucketFill(PlayerBucketFillEvent event) {
+        ItemStack result = event.getItemStack();
+        if (result != null && result.getType() == Material.MILK_BUCKET) {
+            return;                                      // milking a cow, not taking the water
+        }
+        denyBucket(event);
+    }
+
+    private void denyBucket(PlayerBucketEvent event) {
+        if (editing(event.getPlayer())) {
+            return;
+        }
+        if (plugin.zoneAt(event.getBlock()) != null || plugin.zoneAt(event.getBlockClicked()) != null) {
+            event.setCancelled(true);
+            plugin.messages().send(event.getPlayer(), "no-building");
+        }
+    }
+
+    /**
+     * Mobs don't trample a zone's farmland either. Theirs arrives as an entity interact, not the
+     * player's {@code PHYSICAL} one handled in {@link #onTrample}.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onEntityTrample(EntityInteractEvent event) {
+        Block block = event.getBlock();
+        if (block.getType() == Material.FARMLAND && plugin.zoneAt(block) != null) {
+            event.setCancelled(true);
+        }
+    }
+
+    /**
+     * A zone's farmland doesn't dry back to dirt. Dirt pops the crop on it, and that crop was never
+     * broken, so it would never come back.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onFarmlandDry(BlockFadeEvent event) {
+        Block block = event.getBlock();
+        if (block.getType() == Material.FARMLAND && plugin.zoneAt(block) != null) {
+            event.setCancelled(true);
         }
     }
 
