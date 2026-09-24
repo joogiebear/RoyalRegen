@@ -4,6 +4,7 @@ import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.Tag;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.Ageable;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
@@ -26,6 +27,7 @@ import org.bukkit.scheduler.BukkitRunnable;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -46,6 +48,14 @@ public final class RegenListener implements Listener {
      * a leaf - the limit is only reached by something that is genuinely not a tree.
      */
     private static final int TREE_SCAN_LIMIT = 512;
+
+    /**
+     * Plants that stand on the block below them, so breaking one pops every block of it above.
+     * Those upper blocks never fire a break event of their own.
+     */
+    private static final Set<Material> STACKED = EnumSet.of(Material.SUGAR_CANE, Material.CACTUS,
+            Material.BAMBOO, Material.KELP, Material.KELP_PLANT,
+            Material.TWISTING_VINES, Material.TWISTING_VINES_PLANT);
 
     /** Edit a zone's protected blocks without switching gamemode — same shape as the suite's others. */
     public static final String BYPASS = "royalregen.bypass";
@@ -374,6 +384,7 @@ public final class RegenListener implements Listener {
         event.setCancelled(false);
 
         plugin.regen().harvest(block, rule.regenMillis());
+        harvestStackAbove(zone, block, rule.regenMillis());
 
         if (rule.fell() && !felling) {
             fellTree(player, block);
@@ -385,6 +396,24 @@ public final class RegenListener implements Listener {
         event.setDropItems(false);                       // explicit override; vanilla replaced
         for (ItemStack drop : rule.drops()) {
             block.getWorld().dropItemNaturally(block.getLocation().add(0.5, 0.2, 0.5), drop.clone());
+        }
+    }
+
+    /**
+     * Record the rest of a sugar cane, cactus, bamboo or kelp stack above a harvested block.
+     *
+     * <p>Only the broken block fires an event; the ones above simply pop on the next physics update.
+     * Recording them here is what brings the whole plant back — without it, cutting a cane at the
+     * base restored one block and left the rest of the field a stubble of single canes.
+     */
+    private void harvestStackAbove(Zone zone, Block block, long regenMillis) {
+        if (!STACKED.contains(block.getType())) {
+            return;
+        }
+        Block above = block.getRelative(BlockFace.UP);
+        while (STACKED.contains(above.getType()) && zone.contains(above)) {
+            plugin.regen().harvest(above, regenMillis);
+            above = above.getRelative(BlockFace.UP);
         }
     }
 
