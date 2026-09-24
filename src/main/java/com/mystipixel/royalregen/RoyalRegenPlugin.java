@@ -4,6 +4,7 @@ import com.mystipixel.royalregen.command.RoyalRegenCommand;
 import com.mystipixel.royalregen.message.MessageManager;
 import org.bstats.bukkit.Metrics;
 import org.bstats.charts.SimplePie;
+import org.bukkit.Location;
 import org.bukkit.block.Block;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -56,6 +57,7 @@ public final class RoyalRegenPlugin extends JavaPlugin {
         java.io.File pendingFile = new java.io.File(getDataFolder(), "pending.yml");
         regen.loadPending(pendingFile);
         getServer().getScheduler().runTaskTimer(this, () -> regen.savePendingIfDirty(pendingFile), 100L, 100L);
+        getServer().getScheduler().runTaskTimer(this, discovery::save, 100L, 100L);
 
         setupMetrics();
 
@@ -126,6 +128,16 @@ public final class RoyalRegenPlugin extends JavaPlugin {
     public Zone zoneAt(Block block) {
         for (Zone zone : zones) {
             if (zone.contains(block)) {
+                return zone;
+            }
+        }
+        return null;
+    }
+
+    /** The zone containing this location, or null. Doesn't load the chunk to find out. */
+    public Zone zoneAt(Location location) {
+        for (Zone zone : zones) {
+            if (zone.contains(location)) {
                 return zone;
             }
         }

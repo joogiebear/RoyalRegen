@@ -6,6 +6,8 @@ import org.bukkit.Tag;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.Ageable;
+import org.bukkit.Location;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -23,8 +25,11 @@ import org.bukkit.event.player.PlayerBucketEmptyEvent;
 import org.bukkit.event.player.PlayerBucketEvent;
 import org.bukkit.event.player.PlayerBucketFillEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.event.vehicle.VehicleMoveEvent;
 import org.bukkit.inventory.ItemStack;
 
 import org.bukkit.scheduler.BukkitRunnable;
@@ -562,12 +567,45 @@ public final class RegenListener implements Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onMove(PlayerMoveEvent event) {
         // Only when they actually change block — this event fires for every look and step otherwise.
-        if (event.getFrom().getBlockX() == event.getTo().getBlockX()
-                && event.getFrom().getBlockY() == event.getTo().getBlockY()
-                && event.getFrom().getBlockZ() == event.getTo().getBlockZ()) {
+        if (sameBlock(event.getFrom(), event.getTo())) {
             return;
         }
-        plugin.discovery().update(event.getPlayer());
+        plugin.discovery().update(event.getPlayer(), event.getTo());
+    }
+
+    /**
+     * And as they teleport into one. A teleport has its own handler list, so {@link #onMove} never
+     * sees it — without this, arriving by /warp announced nothing until the first step.
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onTeleport(PlayerTeleportEvent event) {
+        plugin.discovery().update(event.getPlayer(), event.getTo());
+    }
+
+    /** And when they log in standing in one. */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onJoin(PlayerJoinEvent event) {
+        plugin.discovery().update(event.getPlayer(), event.getPlayer().getLocation());
+    }
+
+    /** And when they ride into one; a passenger's movement doesn't fire a player move. */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onVehicleMove(VehicleMoveEvent event) {
+        if (sameBlock(event.getFrom(), event.getTo())) {
+            return;
+        }
+        for (Entity passenger : event.getVehicle().getPassengers()) {
+            if (passenger instanceof Player player) {
+                plugin.discovery().update(player, event.getTo());
+            }
+        }
+    }
+
+    private static boolean sameBlock(Location from, Location to) {
+        return from.getBlockX() == to.getBlockX()
+                && from.getBlockY() == to.getBlockY()
+                && from.getBlockZ() == to.getBlockZ()
+                && java.util.Objects.equals(from.getWorld(), to.getWorld());
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
