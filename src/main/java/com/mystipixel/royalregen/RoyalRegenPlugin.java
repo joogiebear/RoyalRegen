@@ -78,7 +78,7 @@ public final class RoyalRegenPlugin extends JavaPlugin {
             if (restored > 0) {
                 getLogger().info("Restored " + restored + " harvested block(s) before shutdown.");
             }
-            // The map is empty now; writing it out empties pending.yml so the next start recovers nothing.
+            // Only restores for unloaded worlds are left now; writing the map out keeps exactly those.
             regen.savePendingIfDirty(new java.io.File(getDataFolder(), "pending.yml"));
         }
     }
