@@ -41,9 +41,20 @@ import java.util.Set;
  * Harvesting inside a regen zone, and keeping everything else in it intact.
  *
  * <p>Inside a zone this plugin is the authority: it allows the listed blocks and denies everything
- * else itself. That is deliberate. Leaving the world's protection to do the denying meant the break
- * event was already cancelled — and a cancelled break is invisible to every other plugin, so
- * collections, jobs and skills never saw a harvest happen.
+ * else itself. It works with the world's protection in one of two ways, chosen by
+ * {@code override-protection} in config.yml:
+ *
+ * <ul>
+ *   <li><strong>Protection opened for the zone</strong> ({@code false}, the better setup). The
+ *       protection plugin lets breaks through in the zone's area and this plugin does the denying.
+ *       Nothing cancels a harvest, so collections, jobs and skills see it at every priority, and a
+ *       break some other plugin cancelled (an anti-cheat, say) stays cancelled.</li>
+ *   <li><strong>Protection left on</strong> ({@code true}, the default, which needs no setup). The
+ *       protection plugin cancels the break and {@link #onBreak} revives it at {@code HIGHEST}. That
+ *       works, but a listener before {@code HIGHEST} that skips cancelled events misses the harvest,
+ *       the protection plugin may still show its "you can't break that" message, and any other
+ *       plugin's cancellation is overridden along with it.</li>
+ * </ul>
  */
 public final class RegenListener implements Listener {
 
@@ -339,20 +350,21 @@ public final class RegenListener implements Listener {
     /**
      * Harvest a listed block and schedule its return.
      *
-     * <p>Runs late and deliberately <strong>not</strong> {@code ignoreCancelled}. A map like this
-     * denies build across the whole world, so by the time the event gets here the protection plugin
-     * has almost always cancelled it — and a handler that skipped cancelled events would simply
-     * never run. Un-cancelling is the entire point of the plugin: the block list is the permission,
-     * and this is where it is granted.
+     * <p>Runs late and deliberately <strong>not</strong> {@code ignoreCancelled}. With
+     * {@code override-protection} on, the world's protection has usually cancelled the break by the
+     * time it gets here, and a handler that skipped cancelled events would simply never run. Reviving
+     * it is how the block list becomes the permission in that setup. With it off, a cancelled break
+     * is left alone — see the class comment for which setup to prefer.
      *
      * <p>That means the refusals in {@link #onBreakDeny} can no longer be relied on to have removed
      * anything, since a cancelled event still arrives here. Every one of them is re-checked below
      * before the event is revived, or a block that was refused for being unripe or still pending
      * would be un-cancelled right back into a harvest.
      *
-     * <p>Note this overrides <em>any</em> plugin's cancellation, not only the world protection's.
-     * That is unavoidable for a plugin whose job is to reopen a protected area, but it does mean a
-     * listed block inside a zone cannot be protected from harvesting by something else.
+     * <p>Reviving overrides <em>any</em> plugin's cancellation, not only the world protection's, so a
+     * listed block inside a zone cannot be protected from harvesting by something else — an
+     * anti-cheat's cancelled fast-break included. Servers that can open their protection for the
+     * zone should turn {@code override-protection} off for exactly this reason.
      *
      * <h2>Why an empty drop list means "leave it alone"</h2>
      *
@@ -377,6 +389,9 @@ public final class RegenListener implements Listener {
      */
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void onBreak(BlockBreakEvent event) {
+        if (event.isCancelled() && !plugin.overrideProtection()) {
+            return;                                      // someone else refused it; that stands
+        }
         Block block = event.getBlock();
         Zone zone = plugin.zoneAt(block);
         if (zone == null) {

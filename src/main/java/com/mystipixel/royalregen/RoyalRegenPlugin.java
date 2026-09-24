@@ -29,6 +29,7 @@ public final class RoyalRegenPlugin extends JavaPlugin {
     private RegenService regen;
     private MessageManager messages;
     private DiscoveryService discovery;
+    private boolean overrideProtection = true;
 
     @Override
     public void onEnable() {
@@ -102,6 +103,7 @@ public final class RoyalRegenPlugin extends JavaPlugin {
     /** Re-read the zones. Invalid entries are skipped with a reason rather than being fatal. */
     public void reloadZones() {
         reloadConfig();
+        overrideProtection = getConfig().getBoolean("override-protection", true);
         zones.clear();
         ConfigurationSection section = getConfig().getConfigurationSection("zones");
         if (section == null) {
@@ -132,6 +134,11 @@ public final class RoyalRegenPlugin extends JavaPlugin {
 
     public List<Zone> zones() {
         return zones;
+    }
+
+    /** Whether a harvest the world's protection cancelled is revived. See {@link RegenListener}. */
+    public boolean overrideProtection() {
+        return overrideProtection;
     }
 
     public RegenService regen() {
