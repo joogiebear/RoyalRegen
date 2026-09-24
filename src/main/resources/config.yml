@@ -20,6 +20,10 @@
 #  off the F3 debug screen (or a WorldEdit selection), then the opposite corner.
 #  Order does not matter — min/max are sorted on load.
 #
+#  Leave out min and max entirely and the zone covers its whole world. That suits
+#  crops, which are never part of a build. Give corners to anything that is also
+#  a building material (logs, stone), or players could harvest the map itself.
+#
 #  ── A NOTE ON ECONOMY ────────────────────────────────────────────────────────
 #  A regen zone is an INFINITE source: every block comes back. If a shop buys what
 #  it produces at a fixed minimum price, players have unlimited income at that
@@ -51,6 +55,17 @@
 #        another plugin cancels stays cancelled. Recommended where you can.
 override-protection: true
 
+# ── TREE FELLING ───────────────────────────────────────────────────────────────
+# For logs with 'fell: true': breaking one brings the rest of the connected tree
+# down, a few logs per tick, and never past the edge of the zone.
+felling:
+  # Permission needed to fell. Empty ("") lets everyone.
+  permission: royalregen.fell
+  # Most logs a single felling breaks.
+  limit: 250
+  # Logs broken per tick. Lower looks smoother.
+  per-tick: 6
+
 zones:
 
   # ── Example 1: a public farm ────────────────────────────────────────────────
@@ -75,11 +90,20 @@ zones:
     min: {x: 0,   y: 60,  z: 0}
     max: {x: 100, y: 120, z: 100}
 
-    # How long until a harvested block returns.
+    # How long until a harvested block returns. Decimals are fine.
     regen-seconds: 45
 
-    # Only these are harvestable here. 'require-mature' refuses crops that haven't
-    # finished growing.
+    # Only these are harvestable here. Per-block options, all optional:
+    #
+    #   require-mature  refuse a crop that hasn't finished growing. On by default
+    #                   for crops (wheat, carrots, nether wart, cocoa...), off for
+    #                   everything else: sugar cane, cactus and bamboo carry an
+    #                   age too, but it isn't ripeness.
+    #   regen-seconds   this block's own timer, instead of the zone's.
+    #   drops           replace the vanilla drops (read the economy note first).
+    #   require-leaves  logs: refuse one that isn't part of a living tree, so the
+    #                   trees are harvestable and a wall of the same log isn't.
+    #   fell            logs: breaking one brings the tree down (see felling:).
     #
     # No 'drops' key means vanilla drops, untouched — which is almost always what
     # you want. Crops keep their real seed variance, and every drop perk on the
