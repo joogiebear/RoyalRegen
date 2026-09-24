@@ -102,6 +102,18 @@ public final class RoyalRegenCommand implements CommandExecutor, TabCompleter, L
         String id = args[1].toLowerCase(Locale.ROOT);
         // Start from what is on disk now. The copy in memory is whatever the last reload read, and
         // saving it would silently throw away any edit the admin made to config.yml since then.
+        // Parse it on the side first: a file that fails to parse reloads as empty, and saving that
+        // would wipe every other zone.
+        java.io.File file = new java.io.File(plugin.getDataFolder(), "config.yml");
+        if (file.exists()) {
+            try {
+                new org.bukkit.configuration.file.YamlConfiguration().load(file);
+            } catch (java.io.IOException | org.bukkit.configuration.InvalidConfigurationException broken) {
+                sender.sendMessage(Text.chat("&cconfig.yml doesn't parse right now, so the zone wasn't"
+                        + " saved. Fix it first: &e" + broken.getMessage()));
+                return;
+            }
+        }
         plugin.reloadConfig();
         if (plugin.getConfig().isConfigurationSection("zones." + id)) {
             sender.sendMessage(Text.chat("&cA zone called '&e" + id + "&c' already exists in config.yml."));
