@@ -13,6 +13,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.block.LeavesDecayEvent;
 import org.bukkit.event.entity.EntityPlaceEvent;
 import org.bukkit.event.hanging.HangingPlaceEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -401,6 +402,21 @@ public final class RegenListener implements Listener {
         if (plugin.zoneAt(event.getBlock()) != null) {
             event.setCancelled(true);
             plugin.messages().send(event.getPlayer(), "no-building");
+        }
+    }
+
+    /**
+     * Leaves inside a zone never decay.
+     *
+     * <p>Felling a tree cuts its leaves off from any log, and natural leaves then decay within a
+     * minute or two. The logs come back on the regen timer, but by then the canopy is gone — and a
+     * trunk with no canopy fails {@code require-leaves}, so every tree in a lumber zone was
+     * harvestable exactly once. Leaves are scenery here like everything else in a zone.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onLeavesDecay(LeavesDecayEvent event) {
+        if (plugin.zoneAt(event.getBlock()) != null) {
+            event.setCancelled(true);
         }
     }
 
