@@ -97,6 +97,9 @@ public final class RoyalRegenCommand implements CommandExecutor, TabCompleter {
             return;
         }
         String id = args[1].toLowerCase(Locale.ROOT);
+        // Start from what is on disk now. The copy in memory is whatever the last reload read, and
+        // saving it would silently throw away any edit the admin made to config.yml since then.
+        plugin.reloadConfig();
         if (plugin.getConfig().isConfigurationSection("zones." + id)) {
             sender.sendMessage(Text.chat("&cA zone called '&e" + id + "&c' already exists in config.yml."));
             return;
