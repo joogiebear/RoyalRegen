@@ -107,7 +107,7 @@ public final class RegenListener implements Listener {
             // Not harvestable here. This plugin denies it, because the world's protection has been
             // opened up for this area — otherwise a farm would be a hole in the map's protection.
             event.setCancelled(true);
-            plugin.messages().send(player, "not-harvestable");
+            tell(player, "not-harvestable");
             return;
         }
         if (plugin.regen().isPending(block)) {
@@ -116,12 +116,12 @@ public final class RegenListener implements Listener {
         }
         if (rule.requireMature() && !isMature(block)) {
             event.setCancelled(true);
-            plugin.messages().send(player, "not-grown");
+            tell(player, "not-grown");
             return;
         }
         if (rule.requireLeaves() && !partOfTree(block)) {
             event.setCancelled(true);
-            plugin.messages().send(player, "not-a-tree");
+            tell(player, "not-a-tree");
         }
     }
 
@@ -170,6 +170,16 @@ public final class RegenListener implements Listener {
         }
     }
 
+    /**
+     * A refusal message, except for the logs a felling breaks on the player's behalf. They didn't
+     * swing at those, and a tree with a few refused logs would otherwise send a line for each one.
+     */
+    private void tell(Player player, String key) {
+        if (!felling) {
+            plugin.messages().send(player, key);
+        }
+    }
+
     /** Creative players and bypass holders are editing the map, not farming it. */
     private static boolean editing(Player player) {
         return player.getGameMode() == GameMode.CREATIVE || player.hasPermission(BYPASS);
@@ -191,7 +201,7 @@ public final class RegenListener implements Listener {
      * suite and cannot tell one axe from another; a permission is something the server already
      * knows how to grant.
      */
-    private void fellTree(Player player, Block origin) {
+    private void fellTree(Player player, Zone zone, Block origin) {
         String permission = plugin.getConfig().getString("felling.permission", "royalregen.fell");
         if (permission != null && !permission.isBlank() && !player.hasPermission(permission)) {
             return;
@@ -199,7 +209,7 @@ public final class RegenListener implements Listener {
         int limit = Math.max(1, plugin.getConfig().getInt("felling.limit", 250));
         int perTick = Math.max(1, plugin.getConfig().getInt("felling.per-tick", 6));
 
-        List<Block> logs = connectedLogs(origin, limit);
+        List<Block> logs = connectedLogs(zone, origin, limit);
         if (logs.isEmpty()) {
             return;
         }
@@ -234,8 +244,13 @@ public final class RegenListener implements Listener {
         }.runTaskTimer(plugin, 1L, 1L);
     }
 
-    /** Logs connected to this one, upward and sideways, nearest first. Excludes the origin. */
-    private static List<Block> connectedLogs(Block origin, int limit) {
+    /**
+     * Logs connected to this one within the zone, upward and sideways, nearest first. Excludes the
+     * origin. A tree straddling the zone's edge is felled only up to the edge: past it no regen rule
+     * applies, so a log broken there would either be refused or, on an unprotected world, never
+     * come back.
+     */
+    private static List<Block> connectedLogs(Zone zone, Block origin, int limit) {
         List<Block> found = new ArrayList<>();
         Set<Block> seen = new HashSet<>();
         Deque<Block> queue = new ArrayDeque<>();
@@ -251,7 +266,7 @@ public final class RegenListener implements Listener {
                             continue;
                         }
                         Block next = current.getRelative(dx, dy, dz);
-                        if (Tag.LOGS.isTagged(next.getType()) && seen.add(next)) {
+                        if (Tag.LOGS.isTagged(next.getType()) && zone.contains(next) && seen.add(next)) {
                             found.add(next);
                             queue.add(next);
                         }
@@ -392,7 +407,7 @@ public final class RegenListener implements Listener {
         harvestStackAbove(zone, block, rule.regenMillis());
 
         if (rule.fell() && !felling) {
-            fellTree(player, block);
+            fellTree(player, zone, block);
         }
         if (rule.drops().isEmpty()) {
             return;                                      // vanilla drops stand — see above
