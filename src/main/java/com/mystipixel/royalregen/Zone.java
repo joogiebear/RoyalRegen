@@ -2,6 +2,7 @@ package com.mystipixel.royalregen;
 
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.Tag;
 import org.bukkit.block.Block;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.inventory.ItemStack;
@@ -24,7 +25,10 @@ public final class Zone {
     /**
      * What one harvestable block gives, and the conditions on taking it.
      *
-     * @param requireMature crops only — refuses a plant that has not finished growing
+     * @param requireMature refuses a plant that has not finished growing. On by default for crops
+     *                      only (see {@link #isCrop}); sugar cane, cactus, bamboo and kelp also carry
+     *                      an age, but it counts toward the next block of the stack rather than
+     *                      ripeness, so requiring it there refused almost every harvest
      * @param requireLeaves logs only — refuses a log that is not part of a living tree, which is
      *                      what makes a world-scoped lumber zone safe on a built map: the trees are
      *                      harvestable and the walls made of the same log are not
@@ -104,7 +108,7 @@ public final class Zone {
             return null;
         }
 
-        int seconds = Math.max(1, sec.getInt("regen-seconds", 45));
+        long zoneMillis = millis(sec, 45_000L, id, logger);
 
         Map<Material, Rule> rules = new LinkedHashMap<>();
         for (String key : blocks.getKeys(false)) {
@@ -123,11 +127,11 @@ public final class Zone {
                     }
                 }
             }
-            boolean mature = rule == null || rule.getBoolean("require-mature", true);
+            boolean mature = rule == null
+                    ? isCrop(material)
+                    : rule.getBoolean("require-mature", isCrop(material));
             boolean leaves = rule != null && rule.getBoolean("require-leaves", false);
-            long ruleMillis = rule != null && rule.isInt("regen-seconds")
-                    ? Math.max(1, rule.getInt("regen-seconds")) * 1000L
-                    : seconds * 1000L;
+            long ruleMillis = rule != null ? millis(rule, zoneMillis, id, logger) : zoneMillis;
             boolean fell = rule != null && rule.getBoolean("fell", false);
             rules.put(material, new Rule(List.copyOf(drops), mature, leaves, ruleMillis, fell));
         }
@@ -143,13 +147,44 @@ public final class Zone {
         String subtitle = disc != null ? disc.getString("subtitle", "&7Discovered") : "&7Discovered";
         if (wholeWorld) {
             return new Zone(id, world, true, 0, 0, 0, 0, 0, 0,
-                    seconds * 1000L, rules, display, announce, title, subtitle);
+                    zoneMillis, rules, display, announce, title, subtitle);
         }
         return new Zone(id, world, false,
                 Math.min(min.getInt("x"), max.getInt("x")), Math.min(min.getInt("y"), max.getInt("y")),
                 Math.min(min.getInt("z"), max.getInt("z")), Math.max(min.getInt("x"), max.getInt("x")),
                 Math.max(min.getInt("y"), max.getInt("y")), Math.max(min.getInt("z"), max.getInt("z")),
-                seconds * 1000L, rules, display, announce, title, subtitle);
+                zoneMillis, rules, display, announce, title, subtitle);
+    }
+
+    /**
+     * A section's {@code regen-seconds} in milliseconds, or the fallback when it has none.
+     *
+     * <p>Any number is accepted, so {@code 1.5} means a second and a half; the old integer-only read
+     * ignored it without a word and used the zone's timer instead.
+     */
+    private static long millis(ConfigurationSection sec, long fallback, String zone, Logger logger) {
+        if (!sec.isSet("regen-seconds")) {
+            return fallback;
+        }
+        Object raw = sec.get("regen-seconds");
+        if (!(raw instanceof Number number)) {
+            logger.warning("Zone '" + zone + "': regen-seconds '" + raw + "' isn't a number — using "
+                    + (fallback / 1000.0) + "s.");
+            return fallback;
+        }
+        return Math.max(1000L, Math.round(number.doubleValue() * 1000));
+    }
+
+    /**
+     * Whether this block is a crop, whose age means ripeness.
+     *
+     * <p>Decides the {@code require-mature} default, and whether a harvest leaves a bare stem behind.
+     * Plants that grow as a stack are deliberately not crops: their age only counts toward the next
+     * block, so most of a ripe sugar cane stands at age 0.
+     */
+    public static boolean isCrop(Material material) {
+        return Tag.CROPS.isTagged(material) || material == Material.NETHER_WART
+                || material == Material.COCOA || material == Material.SWEET_BERRY_BUSH;
     }
 
     /**

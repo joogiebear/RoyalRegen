@@ -82,7 +82,8 @@ public final class RoyalRegenCommand implements CommandExecutor, TabCompleter {
      * off the F3 screen, type them into YAML, reload) is exactly the part a command should do.
      *
      * <p>The block list is seeded from the block the admin is looking at — stand in the field, look
-     * at the wheat, create — with {@code require-mature} set when it's a crop. More blocks are added
+     * at the wheat, create — with {@code require-mature} set when it's a crop (not merely something
+     * with an age, like sugar cane). More blocks are added
      * in config, where each one's options are documented.
      */
     private void create(CommandSender sender, String[] args) {
@@ -140,7 +141,7 @@ public final class RoyalRegenCommand implements CommandExecutor, TabCompleter {
         cfg.set(base + ".max.z", Math.max(a.getBlockZ(), b.getBlockZ()));
         cfg.set(base + ".regen-seconds", seconds);
         String blockKey = looking.getType().getKey().toString();
-        if (looking.getBlockData() instanceof org.bukkit.block.data.Ageable) {
+        if (Zone.isCrop(looking.getType())) {
             cfg.set(base + ".blocks." + blockKey + ".require-mature", true);
         } else {
             cfg.createSection(base + ".blocks." + blockKey);

@@ -45,7 +45,8 @@ public final class RegenService {
      * Take the block now and schedule its return.
      *
      * <p>Crops are reset to age 0 rather than left as air: a bare stem reads as "harvested, growing
-     * back", where a hole reads as something a player dug out of the farm.
+     * back", where a hole reads as something a player dug out of the farm. Only crops — an age-0
+     * sugar cane is a full-size cane, so resetting one would put the harvested block straight back.
      */
     public void harvest(Block block, long regenMillis) {
         Location key = block.getLocation();
@@ -59,7 +60,7 @@ public final class RegenService {
         // A tick later, because the break event is left uncancelled so other plugins can see it —
         // which means the server sets this block to air immediately after this method returns, and
         // anything written now would simply be overwritten.
-        if (original instanceof Ageable) {
+        if (original instanceof Ageable && Zone.isCrop(original.getMaterial())) {
             plugin.getServer().getScheduler().runTask(plugin, () -> {
                 if (!block.getType().isAir()) {
                     return;                     // something else already refilled it; leave it alone
