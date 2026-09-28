@@ -104,6 +104,10 @@ zones:
     #   require-leaves  logs: refuse one that isn't part of a living tree, so the
     #                   trees are harvestable and a wall of the same log isn't.
     #   fell            logs: breaking one brings the tree down (see felling:).
+    #   placeholder     what stands in the block's place until it comes back, e.g.
+    #                   bedrock in a mine. Also settable once for the whole zone
+    #                   (zone-level 'placeholder:'); 'none' turns it off for one
+    #                   block. Crops ignore it: they regrow from a seedling.
     #
     # No 'drops' key means vanilla drops, untouched — which is almost always what
     # you want. Crops keep their real seed variance, and every drop perk on the
@@ -141,6 +145,10 @@ zones:
     max: {x: 260, y: 60, z: 260}
 
     regen-seconds: 120
+
+    # A mined ore shows as bedrock until it comes back, so it reads as "regrowing"
+    # rather than a hole. Can't be broken: the spot is waiting to regrow.
+    placeholder: bedrock
 
     # All vanilla here too: stone already gives cobblestone, coal ore gives coal,
     # iron ore gives raw iron. Spelling those out would only cost the players their

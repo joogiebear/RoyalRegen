@@ -65,6 +65,16 @@ public final class RegenService {
      * sugar cane is a full-size cane, so resetting one would put the harvested block straight back.
      */
     public void harvest(Block block, long regenMillis) {
+        harvest(block, regenMillis, null);
+    }
+
+    /**
+     * As {@link #harvest(Block, long)}, putting {@code placeholder} in the block's place until it returns
+     * (bedrock in a mine, so a mined ore reads as "coming back" rather than a hole). Null leaves it empty.
+     * Crops ignore it and regrow from age 0. The placeholder is never harvestable: the spot is pending, so
+     * any break of it is refused.
+     */
+    public void harvest(Block block, long regenMillis, org.bukkit.Material placeholder) {
         Spot key = Spot.of(block);
         if (pending.containsKey(key)) {
             return;
@@ -84,6 +94,12 @@ public final class RegenService {
                 BlockData reset = original.clone();
                 ((Ageable) reset).setAge(0);
                 block.setBlockData(reset, false);
+            });
+        } else if (placeholder != null) {
+            plugin.getServer().getScheduler().runTask(plugin, () -> {
+                if (block.getType().isAir()) {  // something else already refilled it; leave it alone
+                    block.setType(placeholder, false);
+                }
             });
         }
     }

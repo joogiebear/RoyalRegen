@@ -76,6 +76,7 @@ Block names work with or without the `minecraft:` namespace. Per-block options:
 | `drops` | Replace the vanilla drops, e.g. `[WHEAT:1, WHEAT_SEEDS:1]`. Leave it out almost always — see the note on economy. |
 | `require-leaves` | Logs: refuse one that isn't part of a living tree, so trees are harvestable and a wall of the same log isn't. |
 | `fell` | Logs: breaking one brings the connected tree down, a few logs per tick, within the zone. Needs `royalregen.fell` (configurable under `felling:`). |
+| `placeholder` | What stands in the block's place until it comes back, e.g. `bedrock` in a mine. Can also be set once per zone; `none` turns it off for one block. Crops ignore it and regrow from a seedling. The placeholder can't be broken. |
 
 Each zone can also announce itself when a player walks, rides or teleports in — a title on the first
 visit, the display name after that. Set `discovery.enabled: false` to turn that off.

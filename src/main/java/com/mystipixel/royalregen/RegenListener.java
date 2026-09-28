@@ -423,7 +423,7 @@ public final class RegenListener implements Listener {
         // A genuine harvest. Revive it past the world's protection - see above.
         event.setCancelled(false);
 
-        plugin.regen().harvest(block, rule.regenMillis());
+        plugin.regen().harvest(block, rule.regenMillis(), rule.placeholder());
         harvestStackAbove(zone, block, rule.regenMillis());
 
         if (rule.fell() && !felling) {

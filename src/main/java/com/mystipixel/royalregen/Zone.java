@@ -38,9 +38,11 @@ public final class Zone {
      *                      so the only way to price them differently is here
      * @param fell          logs only — harvesting one brings the rest of the connected tree down
      *                      with it, spread over several ticks
+     * @param placeholder   what stands in the harvested block's place until it returns (bedrock in a
+     *                      mine), or null to leave it empty. Crops ignore it: they regrow from age 0.
      */
     public record Rule(List<ItemStack> drops, boolean requireMature, boolean requireLeaves,
-                       long regenMillis, boolean fell) {
+                       long regenMillis, boolean fell, Material placeholder) {
     }
 
     private final String id;
@@ -109,6 +111,7 @@ public final class Zone {
         }
 
         long zoneMillis = millis(sec, 45_000L, id, logger);
+        Material zonePlaceholder = placeholder(sec.getString("placeholder"), null, id, logger);
 
         Map<Material, Rule> rules = new LinkedHashMap<>();
         for (String key : blocks.getKeys(false)) {
@@ -133,7 +136,10 @@ public final class Zone {
             boolean leaves = rule != null && rule.getBoolean("require-leaves", false);
             long ruleMillis = rule != null ? millis(rule, zoneMillis, id, logger) : zoneMillis;
             boolean fell = rule != null && rule.getBoolean("fell", false);
-            rules.put(material, new Rule(List.copyOf(drops), mature, leaves, ruleMillis, fell));
+            Material placeholder = rule != null && rule.contains("placeholder")
+                    ? placeholder(rule.getString("placeholder"), null, id, logger)
+                    : zonePlaceholder;
+            rules.put(material, new Rule(List.copyOf(drops), mature, leaves, ruleMillis, fell, placeholder));
         }
         if (rules.isEmpty()) {
             logger.warning("Zone '" + id + "' had no usable blocks — skipping it.");
@@ -162,6 +168,23 @@ public final class Zone {
      * <p>Any number is accepted, so {@code 1.5} means a second and a half; the old integer-only read
      * ignored it without a word and used the zone's timer instead.
      */
+    /** A placeholder block name, or null for none ("none", "air" or unset). */
+    private static Material placeholder(String key, Material fallback, String zone, Logger logger) {
+        if (key == null || key.isBlank()) {
+            return fallback;
+        }
+        if (key.equalsIgnoreCase("none") || key.equalsIgnoreCase("air")) {
+            return null;
+        }
+        Material material = material(key);
+        if (material == null || !material.isBlock() || material.isAir()) {
+            logger.warning("Zone '" + zone + "': placeholder '" + key + "' isn't a block — leaving harvested"
+                    + " blocks empty instead.");
+            return fallback;
+        }
+        return material;
+    }
+
     private static long millis(ConfigurationSection sec, long fallback, String zone, Logger logger) {
         if (!sec.isSet("regen-seconds")) {
             return fallback;
