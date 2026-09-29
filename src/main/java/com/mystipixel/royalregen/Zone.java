@@ -4,6 +4,7 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Tag;
 import org.bukkit.block.Block;
+import org.bukkit.block.data.Brushable;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.inventory.ItemStack;
 
@@ -40,9 +41,11 @@ public final class Zone {
      *                      with it, spread over several ticks
      * @param placeholder   what stands in the harvested block's place until it returns (bedrock in a
      *                      mine), or null to leave it empty. Crops ignore it: they regrow from age 0.
+     * @param brush         suspicious sand and gravel only — what a finished brush pays out, or null
+     *                      when brushing this block does nothing
      */
     public record Rule(List<ItemStack> drops, boolean requireMature, boolean requireLeaves,
-                       long regenMillis, boolean fell, Material placeholder) {
+                       long regenMillis, boolean fell, Material placeholder, Brush brush) {
     }
 
     private final String id;
@@ -139,7 +142,17 @@ public final class Zone {
             Material placeholder = rule != null && rule.contains("placeholder")
                     ? placeholder(rule.getString("placeholder"), null, id, logger)
                     : zonePlaceholder;
-            rules.put(material, new Rule(List.copyOf(drops), mature, leaves, ruleMillis, fell, placeholder));
+            Brush brush = null;
+            if (rule != null && rule.contains("brush")) {
+                if (material.createBlockData() instanceof Brushable) {
+                    brush = Brush.load(rule.getConfigurationSection("brush"), id, key, logger);
+                } else {
+                    logger.warning("Zone '" + id + "': '" + key + "' can't be brushed — ignoring its"
+                            + " brush section.");
+                }
+            }
+            rules.put(material, new Rule(List.copyOf(drops), mature, leaves, ruleMillis, fell, placeholder,
+                    brush));
         }
         if (rules.isEmpty()) {
             logger.warning("Zone '" + id + "' had no usable blocks — skipping it.");

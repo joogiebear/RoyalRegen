@@ -4,6 +4,7 @@ import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.Ageable;
 import org.bukkit.block.data.BlockData;
+import org.bukkit.block.data.Brushable;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -102,6 +103,35 @@ public final class RegenService {
                 }
             });
         }
+    }
+
+    /**
+     * A finished brush: schedule the suspicious block's return and stand the placeholder in its place.
+     *
+     * <p>Not {@link #harvest}: the block isn't broken, it turns into plain sand or gravel a moment after
+     * this is called, so the placeholder goes in whenever the block is no longer the original rather than
+     * only when it is air. The original is stored with its brushing progress reset, or the block would
+     * come back already half dusted.
+     */
+    public void harvestBrushed(Block block, long regenMillis, org.bukkit.Material placeholder) {
+        Spot key = Spot.of(block);
+        if (pending.containsKey(key)) {
+            return;
+        }
+        BlockData original = block.getBlockData().clone();
+        if (original instanceof Brushable brushable) {
+            brushable.setDusted(0);
+        }
+        pending.put(key, new Pending(original, System.currentTimeMillis() + regenMillis));
+        dirty = true;
+
+        // A tick later, once the brush has swapped the block for its plain form. Placeholder or not, that
+        // form must go: a gravel block left standing reads as a hole in the ground, and sand would fall.
+        plugin.getServer().getScheduler().runTask(plugin, () -> {
+            if (block.getType() != original.getMaterial() && pending.containsKey(key)) {
+                block.setType(placeholder != null ? placeholder : org.bukkit.Material.AIR, false);
+            }
+        });
     }
 
     /** Put back everything that is due. Called on a timer. */

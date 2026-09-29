@@ -108,6 +108,8 @@ zones:
     #                   bedrock in a mine. Also settable once for the whole zone
     #                   (zone-level 'placeholder:'); 'none' turns it off for one
     #                   block. Crops ignore it: they regrow from a seedling.
+    #   brush           suspicious sand and gravel: what a finished brush pays
+    #                   out. See the archaeology example at the bottom.
     #
     # No 'drops' key means vanilla drops, untouched — which is almost always what
     # you want. Crops keep their real seed variance, and every drop perk on the
@@ -158,3 +160,66 @@ zones:
       minecraft:stone: {}
       minecraft:coal_ore: {}
       minecraft:iron_ore: {}
+
+  # ── Example 3: archaeology ──────────────────────────────────────────────────
+  # Suspicious sand and gravel that pays out when a player finishes brushing it,
+  # then shows the placeholder and comes back as suspicious after regen-seconds.
+  # A regenerated block has no loot table, so a brush yields nothing by itself —
+  # the table below is the whole reward.
+  #
+  # Brushing needs the world's protection opened for the zone, exactly like
+  # harvesting does (override-protection: false). With WorldGuard the zone's
+  # region needs block-break, block-place and interact set to allow: every brush
+  # stroke swaps the block for the next dust stage, which WorldGuard checks as a
+  # break plus a place. RoyalRegen does not bypass protection for brushing, and
+  # brushing is not revived when protection cancels it.
+  example-archaeology:
+    enabled: false
+    world: hub
+
+    display-name: "&aExample Dig Site"
+    min: {x: 300, y: 60, z: 300}
+    max: {x: 360, y: 90, z: 360}
+
+    regen-seconds: 45
+    placeholder: bedrock
+
+    blocks:
+      minecraft:suspicious_gravel:
+        regen-seconds: 300
+        # Leave 'brush' out and brushing this block does nothing at all.
+        brush:
+          enabled: true
+          # Drop whatever vanilla item the brush would pop out (only blocks that
+          # were generated with a loot table have one). Default true.
+          replace-vanilla-loot: true
+          # Percentage points added to the chance of every drop marked 'bonus: true'.
+          # The key is the held item's EcoItems id (ecoitems:<id>) when it is an
+          # EcoItem, otherwise its own key. A tool not listed adds nothing.
+          tools:
+            minecraft:brush: 0
+            ecoitems:archaeologists_brush: 1
+            ecoitems:master_brush: 2
+          # Every drop is rolled on its own, so one brush can pay several or none.
+          # 'chance' is a percent. Commands run as the console, with %player%
+          # %uuid% %x% %y% %z% %above_y% %world% and %tool% filled in. %x% %y% %z%
+          # are the brushed block, which becomes the placeholder: spawn things at
+          # %above_y%, not %y%, or they appear inside it.
+          drops:
+            - chance: 4
+              bonus: true
+              commands: ["give %player% minecraft:clay_ball 1"]
+            - chance: 2
+              commands: ["give %player% minecraft:emerald 1"]
+          # Rolled once per finished brush, e.g. for a mini-boss.
+          rare-event:
+            chance: 0.2
+            commands: ["say %player% unearthed something at %x% %above_y% %z%"]
+      minecraft:suspicious_sand:
+        regen-seconds: 300
+        brush:
+          enabled: true
+          drops:
+            - chance: 3
+              bonus: true
+              commands: ["give %player% minecraft:gold_nugget 1"]

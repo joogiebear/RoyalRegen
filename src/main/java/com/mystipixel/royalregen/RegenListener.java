@@ -2,10 +2,13 @@ package com.mystipixel.royalregen;
 
 import org.bukkit.GameMode;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.Tag;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.block.BrushableBlock;
 import org.bukkit.block.data.Ageable;
+import org.bukkit.block.data.Brushable;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
@@ -15,9 +18,11 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockDropItemEvent;
 import org.bukkit.event.block.BlockFadeEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.block.LeavesDecayEvent;
+import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityInteractEvent;
 import org.bukkit.event.entity.EntityPlaceEvent;
 import org.bukkit.event.hanging.HangingPlaceEvent;
@@ -31,6 +36,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.vehicle.VehicleMoveEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.persistence.PersistentDataType;
 
 import org.bukkit.scheduler.BukkitRunnable;
 
@@ -40,7 +46,9 @@ import java.util.Deque;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Harvesting inside a regen zone, and keeping everything else in it intact.
@@ -80,6 +88,9 @@ public final class RegenListener implements Listener {
 
     /** Edit a zone's protected blocks without switching gamemode — same shape as the suite's others. */
     public static final String BYPASS = "royalregen.bypass";
+
+    /** How EcoItems marks an item: {@code ecoitems:item} holds the item's id. */
+    private static final NamespacedKey ECOITEMS_TAG = new NamespacedKey("ecoitems", "item");
 
     private final RoyalRegenPlugin plugin;
 
@@ -436,6 +447,98 @@ public final class RegenListener implements Listener {
         event.setDropItems(false);                       // explicit override; vanilla replaced
         for (ItemStack drop : rule.drops()) {
             block.getWorld().dropItemNaturally(block.getLocation().add(0.5, 0.2, 0.5), drop.clone());
+        }
+    }
+
+    /**
+     * A player finished brushing a suspicious block: pay out the zone's table and start its regrowth.
+     *
+     * <p>Paper has no brush event. What the server does fire, in {@code BrushableBlockEntity#brush}, is
+     * {@link EntityChangeBlockEvent} for the brushing player — on every dust stage, and once more when the
+     * block turns into plain sand or gravel, which is the one whose new block data is no longer
+     * {@link Brushable}. It fires before the loot is dropped and whether or not the block has any, so it
+     * catches the regenerated blocks that have no loot table, where {@link BlockDropItemEvent} would never
+     * fire.
+     *
+     * <p>Runs at {@code MONITOR} so a cancelled brush (WorldGuard's, an anti-cheat's) has already been
+     * refused and nothing is paid for it. There is deliberately no revival here as there is for breaks:
+     * protection has to be opened for the zone (see the README), not bypassed.
+     */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onBrush(EntityChangeBlockEvent event) {
+        if (!(event.getEntity() instanceof Player player) || event.getBlockData() instanceof Brushable) {
+            return;                                      // not a player, or a stroke rather than the finish
+        }
+        Block block = event.getBlock();
+        if (!(block.getBlockData() instanceof Brushable) || editing(player)) {
+            return;                                      // not suspicious, or an edit rather than a dig
+        }
+        Zone zone = plugin.zoneAt(block);
+        Zone.Rule rule = zone == null ? null : zone.rule(block.getType());
+        if (rule == null || rule.brush() == null || plugin.regen().isPending(block)) {
+            return;
+        }
+
+        payOut(player, block, rule.brush());
+        plugin.regen().harvestBrushed(block, rule.regenMillis(), rule.placeholder());
+    }
+
+    /**
+     * Drop the vanilla item a brush would pop out, when the block asks for it.
+     *
+     * <p>Only a block generated with a loot table has one; a regenerated block has none. Cancelling this
+     * event is what discards it — the server spawns the item only if nobody cancels.
+     */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onBrushDrop(BlockDropItemEvent event) {
+        if (!(event.getBlockState() instanceof BrushableBlock) || editing(event.getPlayer())) {
+            return;
+        }
+        Zone zone = plugin.zoneAt(event.getBlock());
+        Zone.Rule rule = zone == null ? null : zone.rule(event.getBlockState().getType());
+        if (rule != null && rule.brush() != null && rule.brush().replaceVanillaLoot()) {
+            event.setCancelled(true);
+        }
+    }
+
+    /** Roll the table for one finished brush and run what hit. */
+    private void payOut(Player player, Block block, Brush brush) {
+        ItemStack held = player.getActiveItem();
+        if (held.getType().isAir()) {
+            held = player.getInventory().getItemInMainHand();
+        }
+        String ecoId = held.hasItemMeta() ? held.getItemMeta().getPersistentDataContainer()
+                .get(ECOITEMS_TAG, PersistentDataType.STRING) : null;
+        String tool = Brush.toolId(ecoId, held.getType().getKey().toString());
+        double bonus = brush.toolBonus(tool);
+
+        Map<String, String> values = Map.of(
+                "player", player.getName(), "uuid", player.getUniqueId().toString(),
+                "x", String.valueOf(block.getX()), "y", String.valueOf(block.getY()),
+                "z", String.valueOf(block.getZ()), "above_y", String.valueOf(block.getY() + 1),
+                "world", block.getWorld().getName(), "tool", tool);
+
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+        for (Brush.Drop drop : brush.drops()) {
+            if (Brush.hit(Brush.chance(drop.chance(), drop.bonus(), bonus), random.nextDouble())) {
+                run(drop.commands(), values);
+            }
+        }
+        if (brush.rare() != null && Brush.hit(brush.rare().chance(), random.nextDouble())) {
+            run(brush.rare().commands(), values);
+        }
+    }
+
+    private void run(List<String> commands, Map<String, String> values) {
+        for (String command : commands) {
+            String line = Brush.expand(command, values);
+            try {
+                if (!plugin.getServer().dispatchCommand(plugin.getServer().getConsoleSender(), line)) {
+                    plugin.getLogger().warning("Brush command was not recognised: " + line);
+                }
+            } catch (RuntimeException e) {
+                plugin.getLogger().warning("Brush command failed (" + line + "): " + e.getMessage());
+            }
         }
     }
 

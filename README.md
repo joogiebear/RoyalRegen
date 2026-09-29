@@ -77,6 +77,7 @@ Block names work with or without the `minecraft:` namespace. Per-block options:
 | `require-leaves` | Logs: refuse one that isn't part of a living tree, so trees are harvestable and a wall of the same log isn't. |
 | `fell` | Logs: breaking one brings the connected tree down, a few logs per tick, within the zone. Needs `royalregen.fell` (configurable under `felling:`). |
 | `placeholder` | What stands in the block's place until it comes back, e.g. `bedrock` in a mine. Can also be set once per zone; `none` turns it off for one block. Crops ignore it and regrow from a seedling. The placeholder can't be broken. |
+| `brush` | Suspicious sand and gravel: what a finished brush pays out — see [Archaeology](#archaeology). |
 
 Each zone can also announce itself when a player walks, rides or teleports in — a title on the first
 visit, the display name after that. Set `discovery.enabled: false` to turn that off.
@@ -86,6 +87,48 @@ otherwise lose their lower rows.
 
 Nothing here is farming-specific. Swap the block list for ores and a longer `regen-seconds` and the same
 zone is a public mine.
+
+## Archaeology
+
+Brushing a suspicious block isn't a break, so it needs its own section. When a player finishes brushing a
+listed block, RoyalRegen rolls the block's `drops`, runs their console commands, stands the placeholder
+where the block was, and brings the original back after `regen-seconds`.
+
+```yaml
+blocks:
+  minecraft:suspicious_gravel:
+    regen-seconds: 300
+    brush:
+      enabled: true
+      replace-vanilla-loot: true       # drop any vanilla item the brush would pop out (default true)
+      tools:                           # percentage points added to every `bonus: true` drop
+        minecraft:brush: 0
+        ecoitems:archaeologists_brush: 1
+      drops:                           # each rolled on its own
+        - chance: 4                    # percent
+          bonus: true
+          commands: ["ecoitems give %player% fossil_fragment 1"]
+      rare-event:                      # rolled once per finished brush
+        chance: 0.2
+        commands: ["ecomobs spawn buried_sentinel %x% %above_y% %z% %world%"]
+```
+
+- **Chance and bonus.** A drop's chance is `chance`, plus the held tool's bonus when the drop says
+  `bonus: true`, capped at 100. A tool that isn't listed adds nothing.
+- **Tool ids.** An EcoItem is `ecoitems:<id>`, read from EcoItems' own `ecoitems:item` tag; anything else
+  is the item's key, such as `minecraft:brush`. Other plugins also tag vanilla items, so only EcoItems'
+  tag counts.
+- **Placeholders** in commands: `%player% %uuid% %x% %y% %z% %above_y% %world% %tool%`. The coordinates are
+  the brushed block, which turns into the placeholder — spawn a mob at `%above_y%`, not `%y%`.
+- **Regenerated blocks have no loot table**, so a brush gives nothing on its own; the table is the whole
+  reward. `replace-vanilla-loot` only matters for blocks generated with one.
+- Creative players and `royalregen.bypass` holders brush normally and trigger nothing, as with breaking.
+- Suspicious sand and gravel work the same way; a block not listed, or outside a zone, is untouched.
+
+Brushing is **not** revived past protection the way a harvest is. It needs `override-protection: false`
+and the zone's area opened up: with WorldGuard, give the region `block-break`, `block-place` and
+`interact` set to `allow`. Every brush stroke swaps the block for its next dust stage, which WorldGuard
+checks as a break plus a place, and starting to brush is a right-click on the block.
 
 ## Commands
 
