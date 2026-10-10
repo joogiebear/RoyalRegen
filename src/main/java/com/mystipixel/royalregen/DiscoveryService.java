@@ -20,11 +20,8 @@ import java.util.UUID;
 import java.util.logging.Level;
 
 /**
- * Announces a zone when a player walks into it, and remembers which ones they've found.
- *
- * <p>A named area that says its name is the difference between "a field" and "the Hillside Terraces" —
- * it turns the map into places rather than scenery. The first visit gets a title; later visits get
- * something quieter, so a regular doesn't have a card thrown at them every time they cross a fence.
+ * Announces a zone when a player walks into it, and remembers which ones they've found. The first
+ * visit gets the discovery title; later visits get a shorter one.
  */
 public final class DiscoveryService {
 
@@ -40,10 +37,7 @@ public final class DiscoveryService {
         load();
     }
 
-    /**
-     * Called as a player changes block, joins, or teleports, with where they are now (or are about to
-     * be). Cheap when nothing has changed, which is almost always.
-     */
+    /** Called as a player changes block, joins or teleports. Cheap when the zone hasn't changed. */
     public void update(Player player, Location at) {
         Zone zone = plugin.zoneAt(at);
         String now = zone == null ? null : zone.id();
@@ -66,7 +60,7 @@ public final class DiscoveryService {
         Set<String> found = discovered.computeIfAbsent(player.getUniqueId(), id -> new HashSet<>());
         boolean first = found.add(zone.id());
         if (first) {
-            dirty = true;                               // written by the next periodic save()
+            dirty = true;
         }
         String heading = first ? zone.discoveryTitle() : zone.displayName();
         String sub = first ? zone.discoverySubtitle() : "";
@@ -84,7 +78,7 @@ public final class DiscoveryService {
     }
 
     public void forget(Player player) {
-        currentZone.remove(player.getUniqueId());       // keep discoveries, drop the position
+        currentZone.remove(player.getUniqueId());       // discoveries are kept
     }
 
     private void load() {
@@ -101,13 +95,7 @@ public final class DiscoveryService {
         }
     }
 
-    /**
-     * Persist discoveries.
-     *
-     * <p>Called every few seconds and on shutdown, and only writes when something new was found. It
-     * used to write the whole file on the main thread for every single find, which grows with the
-     * player count; batching keeps a crash from undoing more than the last few seconds.
-     */
+    /** Called every few seconds and on shutdown; only writes when something new was found. */
     public void save() {
         if (!dirty) {
             return;

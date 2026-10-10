@@ -16,33 +16,21 @@ import java.util.Map;
 import java.util.logging.Logger;
 
 /**
- * A cuboid where listed blocks may be harvested and then come back.
- *
- * <p>Only blocks named here are breakable — that whitelist is the protection. Everything else in the
- * zone is left to whatever else guards the world, so scenery inside a farm stays safe.
+ * A cuboid where listed blocks may be harvested and then come back. Only the listed blocks are
+ * breakable; everything else is left to the world's protection.
  */
 public final class Zone {
 
     /**
      * What one harvestable block gives, and the conditions on taking it.
      *
-     * @param requireMature refuses a plant that has not finished growing. On by default for crops
-     *                      only (see {@link #isCrop}); sugar cane, cactus, bamboo and kelp also carry
-     *                      an age, but it counts toward the next block of the stack rather than
-     *                      ripeness, so requiring it there refused almost every harvest
-     * @param requireLeaves logs only — refuses a log that is not part of a living tree, which is
-     *                      what makes a world-scoped lumber zone safe on a built map: the trees are
-     *                      harvestable and the walls made of the same log are not
-     * @param regenMillis   how long this block takes to come back, defaulting to the zone's own
-     *                      timer. Per-block because value varies far more than location does: a
-     *                      mine holds coal and diamond in the same stone, and zones cannot overlap,
-     *                      so the only way to price them differently is here
-     * @param fell          logs only — harvesting one brings the rest of the connected tree down
-     *                      with it, spread over several ticks
-     * @param placeholder   what stands in the harvested block's place until it returns (bedrock in a
-     *                      mine), or null to leave it empty. Crops ignore it: they regrow from age 0.
-     * @param brush         suspicious sand and gravel only — what a finished brush pays out, or null
-     *                      when brushing this block does nothing
+     * @param requireMature refuses an unripe plant; defaults on for crops only (see {@link #isCrop})
+     * @param requireLeaves logs only: refuses a log that is not part of a living tree
+     * @param regenMillis   how long this block takes to come back; defaults to the zone's timer
+     * @param fell          logs only: harvesting one brings the connected tree down over several ticks
+     * @param placeholder   block shown until it returns (bedrock in a mine), or null for empty.
+     *                      Crops ignore it.
+     * @param brush         suspicious sand and gravel only: the brush payout, or null for none
      */
     public record Rule(List<ItemStack> drops, boolean requireMature, boolean requireLeaves,
                        long regenMillis, boolean fell, Material placeholder, Brush brush) {
@@ -50,7 +38,6 @@ public final class Zone {
 
     private final String id;
     private final String world;
-    /** True when the zone has no corners and covers its whole world. */
     private final boolean wholeWorld;
     private final int minX;
     private final int minY;
@@ -90,26 +77,23 @@ public final class Zone {
     public static Zone load(String id, ConfigurationSection sec, Logger logger) {
         String world = sec.getString("world", "");
         if (world.isBlank()) {
-            logger.warning("Zone '" + id + "' has no world — skipping it.");
+            logger.warning("Zone '" + id + "' has no world, skipping it.");
             return null;
         }
-        // Corners are optional. Omitting both makes the zone cover its whole world, which is what you
-        // want for something like crops: they grow everywhere on a map and are never structural, so
-        // there is no meaningful cuboid to draw around them. Give corners to anything that IS a
-        // building material — logs and stone are walls as often as they are scenery, and a
-        // world-scoped zone would let players harvest the map itself.
+        // No corners means the whole world: fine for crops, but logs and stone need corners or
+        // players could harvest the map itself.
         ConfigurationSection min = sec.getConfigurationSection("min");
         ConfigurationSection max = sec.getConfigurationSection("max");
         boolean wholeWorld = min == null && max == null;
         if (!wholeWorld && (min == null || max == null)) {
-            logger.warning("Zone '" + id + "' has only one corner — give it both, or neither for the"
+            logger.warning("Zone '" + id + "' has only one corner. Give it both, or neither for the"
                     + " whole world. Skipping it.");
             return null;
         }
         ConfigurationSection blocks = sec.getConfigurationSection("blocks");
         if (blocks == null || blocks.getKeys(false).isEmpty()) {
             logger.warning("Zone '" + id + "' lists no blocks, so nothing in it could be harvested"
-                    + " — skipping it.");
+                    + ", skipping it.");
             return null;
         }
 
@@ -120,7 +104,7 @@ public final class Zone {
         for (String key : blocks.getKeys(false)) {
             Material material = material(key);
             if (material == null || !material.isBlock()) {
-                logger.warning("Zone '" + id + "': '" + key + "' isn't a block — ignoring it.");
+                logger.warning("Zone '" + id + "': '" + key + "' isn't a block, ignoring it.");
                 continue;
             }
             ConfigurationSection rule = blocks.getConfigurationSection(key);
@@ -147,7 +131,7 @@ public final class Zone {
                 if (material.createBlockData() instanceof Brushable) {
                     brush = Brush.load(rule.getConfigurationSection("brush"), id, key, logger);
                 } else {
-                    logger.warning("Zone '" + id + "': '" + key + "' can't be brushed — ignoring its"
+                    logger.warning("Zone '" + id + "': '" + key + "' can't be brushed, ignoring its"
                             + " brush section.");
                 }
             }
@@ -155,7 +139,7 @@ public final class Zone {
                     brush));
         }
         if (rules.isEmpty()) {
-            logger.warning("Zone '" + id + "' had no usable blocks — skipping it.");
+            logger.warning("Zone '" + id + "' had no usable blocks, skipping it.");
             return null;
         }
 
@@ -175,13 +159,7 @@ public final class Zone {
                 zoneMillis, rules, display, announce, title, subtitle);
     }
 
-    /**
-     * A section's {@code regen-seconds} in milliseconds, or the fallback when it has none.
-     *
-     * <p>Any number is accepted, so {@code 1.5} means a second and a half; the old integer-only read
-     * ignored it without a word and used the zone's timer instead.
-     */
-    /** A placeholder block name, or null for none ("none", "air" or unset). */
+    // "none" or "air" means no placeholder; unset falls back
     private static Material placeholder(String key, Material fallback, String zone, Logger logger) {
         if (key == null || key.isBlank()) {
             return fallback;
@@ -191,20 +169,21 @@ public final class Zone {
         }
         Material material = material(key);
         if (material == null || !material.isBlock() || material.isAir()) {
-            logger.warning("Zone '" + zone + "': placeholder '" + key + "' isn't a block — leaving harvested"
+            logger.warning("Zone '" + zone + "': placeholder '" + key + "' isn't a block, leaving harvested"
                     + " blocks empty instead.");
             return fallback;
         }
         return material;
     }
 
+    // any number is accepted, so 1.5 means a second and a half
     private static long millis(ConfigurationSection sec, long fallback, String zone, Logger logger) {
         if (!sec.isSet("regen-seconds")) {
             return fallback;
         }
         Object raw = sec.get("regen-seconds");
         if (!(raw instanceof Number number)) {
-            logger.warning("Zone '" + zone + "': regen-seconds '" + raw + "' isn't a number — using "
+            logger.warning("Zone '" + zone + "': regen-seconds '" + raw + "' isn't a number, using "
                     + (fallback / 1000.0) + "s.");
             return fallback;
         }
@@ -212,24 +191,15 @@ public final class Zone {
     }
 
     /**
-     * Whether this block is a crop, whose age means ripeness.
-     *
-     * <p>Decides the {@code require-mature} default, and whether a harvest leaves a bare stem behind.
-     * Plants that grow as a stack are deliberately not crops: their age only counts toward the next
-     * block, so most of a ripe sugar cane stands at age 0.
+     * Whether this block's age means ripeness. Stacked plants (sugar cane, cactus) are not crops:
+     * their age counts toward the next block, so a ripe cane is usually at age 0.
      */
     public static boolean isCrop(Material material) {
         return Tag.CROPS.isTagged(material) || material == Material.NETHER_WART
                 || material == Material.COCOA || material == Material.SWEET_BERRY_BUSH;
     }
 
-    /**
-     * Resolve a block name, with or without its namespace.
-     *
-     * <p>Bukkit's matcher wants either a lowercase namespaced key or a bare enum name, and uppercasing
-     * a whole key gives it neither — "MINECRAFT:POTATOES" resolves to nothing. Strip the namespace and
-     * match on the name, so both {@code minecraft:potatoes} and {@code POTATOES} work in config.
-     */
+    // accepts minecraft:potatoes or POTATOES; an uppercased namespaced key matches nothing
     private static Material material(String key) {
         String name = key.contains(":") ? key.substring(key.indexOf(':') + 1) : key;
         Material direct = Material.matchMaterial(name.toUpperCase(Locale.ROOT));
@@ -243,7 +213,7 @@ public final class Zone {
         String[] parts = line.split(":");
         Material material = Material.matchMaterial(parts[0].trim().toUpperCase(Locale.ROOT));
         if (material == null || !material.isItem()) {
-            logger.warning("Zone '" + zone + "': drop '" + parts[0] + "' isn't an item — ignoring it.");
+            logger.warning("Zone '" + zone + "': drop '" + parts[0] + "' isn't an item, ignoring it.");
             return null;
         }
         int amount = 1;
@@ -251,7 +221,7 @@ public final class Zone {
             try {
                 amount = Math.max(1, Integer.parseInt(parts[1].trim()));
             } catch (NumberFormatException bad) {
-                logger.warning("Zone '" + zone + "': bad amount in '" + line + "' — using 1.");
+                logger.warning("Zone '" + zone + "': bad amount in '" + line + "', using 1.");
             }
         }
         return new ItemStack(material, amount);

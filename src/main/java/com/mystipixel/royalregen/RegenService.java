@@ -12,27 +12,15 @@ import java.util.Set;
 import java.util.TreeSet;
 
 /**
- * Remembers what a harvested block used to be and puts it back.
- *
- * <p>Restores are kept in memory and scanned once a second. Insertion order is NOT due order — a
- * block's rule can set its own regen time, so a slow block harvested first must not hold up a fast
- * one harvested after it.
- *
- * <p>Everything here runs on the server thread.
+ * Remembers what a harvested block used to be and puts it back. Main thread only. Insertion order
+ * is not due order: regen times are per block.
  */
 public final class RegenService {
 
     private record Pending(BlockData original, long dueAt) {
     }
 
-    /**
-     * Where a pending block is, by world <em>name</em>.
-     *
-     * <p>Not a {@code Location}: a Location holds the world itself, so a row for a world that is not
-     * loaded yet (Multiverse and friends load theirs after this plugin starts) could not be kept at
-     * all, and one whose world was unloaded later threw "World unloaded" on every restore tick. A name
-     * waits until the world is there.
-     */
+    // by world name, not Location, so rows survive a world that loads late or is unloaded
     private record Spot(String world, int x, int y, int z) {
         static Spot of(Block block) {
             return new Spot(block.getWorld().getName(), block.getX(), block.getY(), block.getZ());
@@ -42,7 +30,7 @@ public final class RegenService {
     private final RoyalRegenPlugin plugin;
     private final Map<Spot, Pending> pending = new LinkedHashMap<>();
 
-    /** Set on every mutation of {@link #pending}; the write-behind save only touches disk when true. */
+    // set on every change to pending; the write-behind save only touches disk when true
     private boolean dirty;
 
     public RegenService(RoyalRegenPlugin plugin) {
@@ -53,27 +41,18 @@ public final class RegenService {
         return pending.size();
     }
 
-    /** True when this block is already waiting to come back, so it can't be harvested twice. */
     public boolean isPending(Block block) {
         return pending.containsKey(Spot.of(block));
     }
 
-    /**
-     * Take the block now and schedule its return.
-     *
-     * <p>Crops are reset to age 0 rather than left as air: a bare stem reads as "harvested, growing
-     * back", where a hole reads as something a player dug out of the farm. Only crops — an age-0
-     * sugar cane is a full-size cane, so resetting one would put the harvested block straight back.
-     */
+    /** Take the block now and schedule its return. Crops are reset to age 0 rather than left as air. */
     public void harvest(Block block, long regenMillis) {
         harvest(block, regenMillis, null);
     }
 
     /**
-     * As {@link #harvest(Block, long)}, putting {@code placeholder} in the block's place until it returns
-     * (bedrock in a mine, so a mined ore reads as "coming back" rather than a hole). Null leaves it empty.
-     * Crops ignore it and regrow from age 0. The placeholder is never harvestable: the spot is pending, so
-     * any break of it is refused.
+     * As {@link #harvest(Block, long)}, with {@code placeholder} standing in until the block returns,
+     * or null to leave it empty. Crops ignore it.
      */
     public void harvest(Block block, long regenMillis, org.bukkit.Material placeholder) {
         Spot key = Spot.of(block);
@@ -84,13 +63,11 @@ public final class RegenService {
         pending.put(key, new Pending(original, System.currentTimeMillis() + regenMillis));
         dirty = true;
 
-        // A tick later, because the break event is left uncancelled so other plugins can see it —
-        // which means the server sets this block to air immediately after this method returns, and
-        // anything written now would simply be overwritten.
+        // next tick: the server sets the block to air after the break event, overwriting anything now
         if (original instanceof Ageable && Zone.isCrop(original.getMaterial())) {
             plugin.getServer().getScheduler().runTask(plugin, () -> {
                 if (!block.getType().isAir()) {
-                    return;                     // something else already refilled it; leave it alone
+                    return;                     // something else already refilled it
                 }
                 BlockData reset = original.clone();
                 ((Ageable) reset).setAge(0);
@@ -98,7 +75,7 @@ public final class RegenService {
             });
         } else if (placeholder != null) {
             plugin.getServer().getScheduler().runTask(plugin, () -> {
-                if (block.getType().isAir()) {  // something else already refilled it; leave it alone
+                if (block.getType().isAir()) {  // else something already refilled it
                     block.setType(placeholder, false);
                 }
             });
@@ -107,11 +84,7 @@ public final class RegenService {
 
     /**
      * A finished brush: schedule the suspicious block's return and stand the placeholder in its place.
-     *
-     * <p>Not {@link #harvest}: the block isn't broken, it turns into plain sand or gravel a moment after
-     * this is called, so the placeholder goes in whenever the block is no longer the original rather than
-     * only when it is air. The original is stored with its brushing progress reset, or the block would
-     * come back already half dusted.
+     * The block turns into plain sand or gravel rather than air, and is stored with its dusting reset.
      */
     public void harvestBrushed(Block block, long regenMillis, org.bukkit.Material placeholder) {
         Spot key = Spot.of(block);
@@ -125,8 +98,7 @@ public final class RegenService {
         pending.put(key, new Pending(original, System.currentTimeMillis() + regenMillis));
         dirty = true;
 
-        // A tick later, once the brush has swapped the block for its plain form. Placeholder or not, that
-        // form must go: a gravel block left standing reads as a hole in the ground, and sand would fall.
+        // next tick, once the brush has swapped in the plain form; that form always goes (sand would fall)
         plugin.getServer().getScheduler().runTask(plugin, () -> {
             if (block.getType() != original.getMaterial() && pending.containsKey(key)) {
                 block.setType(placeholder != null ? placeholder : org.bukkit.Material.AIR, false);
@@ -134,7 +106,6 @@ public final class RegenService {
         });
     }
 
-    /** Put back everything that is due. Called on a timer. */
     public void tick() {
         if (pending.isEmpty()) {
             return;
@@ -146,8 +117,7 @@ public final class RegenService {
             if (now < entry.getValue().dueAt()) {
                 continue;                    // per-block regen times: a later entry can be due sooner
             }
-            // Only forget it once it is actually back. A block in an unloaded chunk is retried on a
-            // later tick; dropping it here would leave a permanent hole in the farm.
+            // only forget it once it is back; unloaded chunks are retried on a later tick
             if (restore(entry.getKey(), entry.getValue().original())) {
                 it.remove();
                 dirty = true;
@@ -156,13 +126,8 @@ public final class RegenService {
     }
 
     /**
-     * Put everything back at once, whatever its timer says.
-     *
-     * <p>Called on shutdown so a restart never leaves a farm full of holes. Without it, whatever was
-     * harvested in the last few seconds before a stop would stay bare permanently.
-     *
-     * <p>A block whose world is not loaded cannot be put back now, so it stays pending and is written
-     * to pending.yml for the next start, rather than being forgotten along with everything else.
+     * Put everything back at once, whatever its timer says. Called on shutdown. Blocks in unloaded
+     * worlds stay pending and are written to pending.yml.
      */
     public int restoreAll() {
         int n = 0;
@@ -174,8 +139,7 @@ public final class RegenService {
             if (world == null) {
                 continue;
             }
-            // Shutdown is the last chance, so this one does load the chunk if it has to — a briefly
-            // loaded chunk costs nothing next to a farm that never grows back.
+            // loads the chunk if needed: shutdown is the last chance
             try {
                 world.getBlockAt(at.x(), at.y(), at.z()).setBlockData(entry.getValue().original(), false);
                 it.remove();
@@ -193,16 +157,7 @@ public final class RegenService {
         return n;
     }
 
-    // ── crash persistence ────────────────────────────────────────────────────────
-
-    /**
-     * Write the pending map to disk if it changed since the last save.
-     *
-     * <p>{@link #restoreAll} covers a clean stop, but a crash used to take the map with it — every
-     * harvested block whose timer died with the process became a permanent hole in the farm. This is
-     * the same reasoning as RoyalTrade's escrow file: a few tens of small rows every few seconds is
-     * nothing next to a farm that never grows back.
-     */
+    /** Write the pending map to disk if it changed since the last save, so a crash loses nothing. */
     public void savePendingIfDirty(java.io.File file) {
         if (!dirty) {
             return;
@@ -221,16 +176,14 @@ public final class RegenService {
             out.save(file);
             dirty = false;
         } catch (java.io.IOException e) {
-            plugin.getLogger().warning("Could not save pending.yml — a crash from here loses "
+            plugin.getLogger().warning("Could not save pending.yml: a crash from here loses "
                     + rows.size() + " pending restore(s): " + e.getMessage());
         }
     }
 
     /**
-     * Load restores left behind by an unclean shutdown, queueing them as already-due so the next
-     * tick puts them back (with its usual unloaded-chunk retry). Entries for worlds that are not
-     * loaded yet are kept too: the world is often just late, loaded by another plugin after this one
-     * starts, and dropping the row would leave that block a permanent hole.
+     * Load restores left behind by an unclean shutdown. Rows for worlds not loaded yet are kept:
+     * another plugin often loads them later.
      */
     public void loadPending(java.io.File file) {
         if (!file.exists()) {
@@ -269,7 +222,7 @@ public final class RegenService {
         }
     }
 
-    /** Returns false when the world or chunk isn't loaded, so the caller knows to try again later. */
+    // false when the world or chunk isn't loaded, so the caller retries later
     private boolean restore(Spot at, BlockData original) {
         World world = plugin.getServer().getWorld(at.world());
         if (world == null || !world.isChunkLoaded(at.x() >> 4, at.z() >> 4)) {

@@ -13,17 +13,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Blocks in defined zones can be harvested and come back on a timer.
- *
- * <p>Built for hub farms — a map full of crops that players should be able to work without being able
- * to dismantle. Nothing here is specific to farming though: a zone is a cuboid and a list of blocks, so
- * the same thing serves a mine or a quarry.
- *
- * <p>Deliberately standalone: no profile data, no dependency on the rest of the suite.
+ * Blocks in defined zones can be harvested and come back on a timer. Standalone: no dependency on
+ * the rest of the suite.
  */
 public final class RoyalRegenPlugin extends JavaPlugin {
 
-    /** bStats project id. Identifies the plugin, not the server, so it is fixed rather than configurable. */
+    // identifies the plugin's bStats project, so it is not configurable
     private static final int BSTATS_PLUGIN_ID = 33889;
 
     private final List<Zone> zones = new ArrayList<>();
@@ -49,12 +44,10 @@ public final class RoyalRegenPlugin extends JavaPlugin {
         }
         getServer().getPluginManager().registerEvents(command, this);
 
-        // One second is plenty: regen delays are measured in tens of seconds, and a full scan of the
-        // pending map is cheap at the sizes a farm produces.
+        // once a second is plenty for regen delays of tens of seconds
         getServer().getScheduler().runTaskTimer(this, regen::tick, 20L, 20L);
 
-        // Crash safety: recover restores an unclean shutdown left behind, then keep the file in step
-        // (write-behind, only when something changed). restoreAll() still covers a clean stop.
+        // crash safety: recover what an unclean shutdown left, then write behind on change
         java.io.File pendingFile = new java.io.File(getDataFolder(), "pending.yml");
         regen.loadPending(pendingFile);
         getServer().getScheduler().runTaskTimer(this, () -> regen.savePendingIfDirty(pendingFile), 100L, 100L);
@@ -63,12 +56,11 @@ public final class RoyalRegenPlugin extends JavaPlugin {
         setupMetrics();
 
         if (zones.isEmpty()) {
-            // The shipped config is two disabled examples, since coordinates only mean something on
-            // the map they were measured on. Say so, rather than looking quietly broken.
-            getLogger().info("RoyalRegen enabled — no zones active yet. Set the corners of a zone in "
+            // the shipped config's zones are disabled examples
+            getLogger().info("RoyalRegen enabled, no zones active yet. Set the corners of a zone in "
                     + "config.yml, flip enabled: true, then /royalregen reload.");
         } else {
-            getLogger().info("RoyalRegen enabled — " + zones.size() + " zone(s).");
+            getLogger().info("RoyalRegen enabled: " + zones.size() + " zone(s).");
         }
     }
 
@@ -82,22 +74,16 @@ public final class RoyalRegenPlugin extends JavaPlugin {
             if (restored > 0) {
                 getLogger().info("Restored " + restored + " harvested block(s) before shutdown.");
             }
-            // Only restores for unloaded worlds are left now; writing the map out keeps exactly those.
+            // only restores for unloaded worlds are left; this keeps them for the next start
             regen.savePendingIfDirty(new java.io.File(getDataFolder(), "pending.yml"));
         }
     }
 
-    /**
-     * Anonymous usage reporting via bStats.
-     *
-     * <p>Server owners who want no reporting disable it globally in plugins/bStats/config.yml, which
-     * is the mechanism bStats provides; the id itself is fixed because it names this plugin's project.
-     */
+    // owners opt out globally in plugins/bStats/config.yml
     private void setupMetrics() {
         Metrics metrics = new Metrics(this, BSTATS_PLUGIN_ID);
         metrics.addCustomChart(new SimplePie("zone_count", () -> String.valueOf(zones.size())));
-        // The shipped config is two disabled examples, so "0 zones" means installed-but-unconfigured
-        // rather than in use — worth being able to tell those apart.
+        // tells installed-but-unconfigured apart from in use
         metrics.addCustomChart(new SimplePie("configured", () -> String.valueOf(!zones.isEmpty())));
         metrics.addCustomChart(new SimplePie("discovery_used",
                 () -> String.valueOf(zones.stream().anyMatch(Zone::announce))));
@@ -110,7 +96,7 @@ public final class RoyalRegenPlugin extends JavaPlugin {
         zones.clear();
         ConfigurationSection section = getConfig().getConfigurationSection("zones");
         if (section == null) {
-            getLogger().warning("No 'zones:' section in config.yml — nothing will regenerate.");
+            getLogger().warning("No 'zones:' section in config.yml, nothing will regenerate.");
             return;
         }
         for (String id : section.getKeys(false)) {
@@ -125,7 +111,7 @@ public final class RoyalRegenPlugin extends JavaPlugin {
         }
     }
 
-    /** The zone containing this block, or null. Zones are few, so a scan is cheaper than an index. */
+    /** The zone containing this block, or null. */
     public Zone zoneAt(Block block) {
         for (Zone zone : zones) {
             if (zone.contains(block)) {
