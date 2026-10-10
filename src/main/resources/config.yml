@@ -1,61 +1,26 @@
-# ═══════════════════════════════════════════════════════════════════════════════
-#  RoyalRegen  ·  Configuration
-# ═══════════════════════════════════════════════════════════════════════════════
-#  Blocks listed in a zone can be harvested and come back on a timer. Everything
-#  else in the zone is left alone, so a protected map stays protected — the block
-#  list IS the permission.
+# RoyalRegen configuration
 #
-#  This is normally used with a protection plugin denying build in the world.
-#  RoyalRegen listens after it and allows exactly these blocks, in exactly these
-#  places, to be broken. Nothing else changes.
+# Blocks listed in a zone can be harvested and come back on a timer. Everything
+# else in the zone stays protected: the block list is the permission.
+# Apply changes with /royalregen reload. /royalregen status shows what is loaded.
 #
-#  Apply changes with /royalregen reload. /royalregen status shows what is loaded.
+# The zones below are examples and ship disabled. Set your own corners (F3 screen
+# or a WorldEdit selection, in any order), then set enabled: true.
+# Leave out min and max to cover the whole world. That suits crops; give corners
+# to anything that is also a building material (logs, stone).
 #
-#  ── THE ZONES BELOW ARE EXAMPLES ─────────────────────────────────────────────
-#  Both ship DISABLED, because a cuboid only means something on the map it was
-#  measured on — coordinates from someone else's world describe nothing in yours.
-#  Set your own corners, then flip enabled: true.
-#
-#  To get the corners: stand at one corner of the area and read the coordinates
-#  off the F3 debug screen (or a WorldEdit selection), then the opposite corner.
-#  Order does not matter — min/max are sorted on load.
-#
-#  Leave out min and max entirely and the zone covers its whole world. That suits
-#  crops, which are never part of a build. Give corners to anything that is also
-#  a building material (logs, stone), or players could harvest the map itself.
-#
-#  ── A NOTE ON ECONOMY ────────────────────────────────────────────────────────
-#  A regen zone is an INFINITE source: every block comes back. If a shop buys what
-#  it produces at a fixed minimum price, players have unlimited income at that
-#  price, and no dynamic pricing fixes it because the floor is the floor.
-#
-#  The throttle is 'regen-seconds' (how fast it comes back). Set it against what
-#  the item sells for, not by feel.
-#
-#  Do NOT throttle with 'drops'. Overriding drops stops BlockDropItemEvent firing,
-#  and that is the event every drop perk on the server reads — Fortune, reforge and
-#  talisman multipliers, telekinesis, eco's DropQueue. They go silently inert: a
-#  player wearing a "double crops" reforge farms the zone and gets base yield, with
-#  nothing in any log to explain why. See RegenListener#onBreak.
-#
-#  Size matters less than you would think: a field regenerating faster than anyone
-#  can harvest is capped by clicking speed, not by how big it is. Price a harvest
-#  by what a player earns per hour of doing it.
-# ═══════════════════════════════════════════════════════════════════════════════
+# Economy: a zone is an infinite source. Throttle it with regen-seconds, priced
+# against what the item sells for per hour of harvesting. Don't throttle with
+# 'drops': overriding drops stops BlockDropItemEvent, so Fortune, telekinesis and
+# drop multipliers silently stop working.
 
-# ── PROTECTION ─────────────────────────────────────────────────────────────────
-# true:  leave your protection plugin denying breaks everywhere. RoyalRegen revives
-#        a harvest of a listed block after protection cancels it. Needs no setup,
-#        but plugins that skip cancelled breaks (some jobs/skills setups) may miss
-#        harvests, the protection plugin may still show its "can't break" message,
-#        and a break an anti-cheat cancelled is revived too.
-# false: open your protection plugin for each zone's area (e.g. a WorldGuard
-#        region allowing block-break) and let RoyalRegen do the denying there.
-#        Harvests are never cancelled, so every plugin sees them, and anything
-#        another plugin cancels stays cancelled. Recommended where you can.
+# true:  keep your protection plugin denying breaks; RoyalRegen revives harvests
+#        of listed blocks. No setup, but plugins that skip cancelled breaks may
+#        miss harvests, and a break an anti-cheat cancelled is revived too.
+# false: open protection for each zone's area (e.g. a WorldGuard region allowing
+#        block-break) and let RoyalRegen deny there. Recommended where you can.
 override-protection: true
 
-# ── TREE FELLING ───────────────────────────────────────────────────────────────
 # For logs with 'fell: true': breaking one brings the rest of the connected tree
 # down, a few logs per tick, and never past the edge of the zone.
 felling:
@@ -68,25 +33,21 @@ felling:
 
 zones:
 
-  # ── Example 1: a public farm ────────────────────────────────────────────────
-  # The common case — a field in a hub world that players may harvest but not
-  # rebuild. Everything not listed under blocks: stays protected.
+  # Example 1: a public farm players may harvest but not rebuild.
   example-farm:
     enabled: false
     world: hub
 
-    # Shown when a player walks in. Naming an area turns it from scenery into a place.
+    # Shown when a player walks in.
     display-name: "&aExample Field"
     discovery:
       enabled: true
-      # The first visit gets this; later visits just show the display name, so a
-      # regular isn't handed a card every time they cross the fence.
+      # Shown on the first visit; later visits show the display name.
       title: "&6&lExample Field"
       subtitle: "&7Farming region discovered"
 
-    # Opposite corners, inclusive. Give Y a generous range if the ground is uneven:
-    # a field terraced down a hillside will sit outside a tight vertical band, and
-    # the blocks that fall outside it simply will not regenerate.
+    # Opposite corners, inclusive. Give Y a generous range on uneven ground: blocks
+    # outside it won't regenerate.
     min: {x: 0,   y: 60,  z: 0}
     max: {x: 100, y: 120, z: 100}
 
@@ -100,7 +61,8 @@ zones:
     #                   everything else: sugar cane, cactus and bamboo carry an
     #                   age too, but it isn't ripeness.
     #   regen-seconds   this block's own timer, instead of the zone's.
-    #   drops           replace the vanilla drops (read the economy note first).
+    #   drops           replace the vanilla drops (read the economy note first;
+    #                   no perk can multiply replaced drops).
     #   require-leaves  logs: refuse one that isn't part of a living tree, so the
     #                   trees are harvestable and a wall of the same log isn't.
     #   fell            logs: breaking one brings the tree down (see felling:).
@@ -110,13 +72,6 @@ zones:
     #                   block. Crops ignore it: they regrow from a seedling.
     #   brush           suspicious sand and gravel: what a finished brush pays
     #                   out. See the archaeology example at the bottom.
-    #
-    # No 'drops' key means vanilla drops, untouched — which is almost always what
-    # you want. Crops keep their real seed variance, and every drop perk on the
-    # server works with no integration because nothing is intercepting them.
-    #
-    # Set 'drops' ONLY where vanilla is genuinely wrong for the block. It replaces
-    # the vanilla drops entirely, which also means no perk can multiply them.
     blocks:
       minecraft:wheat:
         require-mature: true
@@ -127,12 +82,7 @@ zones:
       minecraft:beetroots:
         require-mature: true
 
-  # ── Example 2: a mine ───────────────────────────────────────────────────────
-  # Nothing here is farming-specific. A zone is a cuboid plus a block list, so the
-  # same mechanism gives you a public mine — longer timers, because ore is worth
-  # more per swing than wheat and comes back just as forever.
-  #
-  # 'require-mature' is omitted: it only means anything for crops.
+  # Example 2: a public mine, with a longer timer because ore is worth more.
   example-mine:
     enabled: false
     world: hub
@@ -148,31 +98,20 @@ zones:
 
     regen-seconds: 120
 
-    # A mined ore shows as bedrock until it comes back, so it reads as "regrowing"
-    # rather than a hole. Can't be broken: the spot is waiting to regrow.
+    # Mined ore shows as bedrock until it comes back. The placeholder can't be broken.
     placeholder: bedrock
 
-    # All vanilla here too: stone already gives cobblestone, coal ore gives coal,
-    # iron ore gives raw iron. Spelling those out would only cost the players their
-    # Fortune. Ore is where Fortune matters most, so this is the last place to
-    # override drops.
+    # Vanilla drops, so Fortune still works.
     blocks:
       minecraft:stone: {}
       minecraft:coal_ore: {}
       minecraft:iron_ore: {}
 
-  # ── Example 3: archaeology ──────────────────────────────────────────────────
-  # Suspicious sand and gravel that pays out when a player finishes brushing it,
-  # then shows the placeholder and comes back as suspicious after regen-seconds.
-  # A regenerated block has no loot table, so a brush yields nothing by itself —
-  # the table below is the whole reward.
-  #
-  # Brushing needs the world's protection opened for the zone, exactly like
-  # harvesting does (override-protection: false). With WorldGuard the zone's
-  # region needs block-break, block-place and interact set to allow: every brush
-  # stroke swaps the block for the next dust stage, which WorldGuard checks as a
-  # break plus a place. RoyalRegen does not bypass protection for brushing, and
-  # brushing is not revived when protection cancels it.
+  # Example 3: archaeology. Suspicious sand and gravel pay out from the table
+  # below when brushed, then come back after regen-seconds. Regenerated blocks
+  # have no loot table, so this table is the whole reward.
+  # Brushing is never revived: with WorldGuard, the zone's region needs
+  # block-break, block-place and interact set to allow.
   example-archaeology:
     enabled: false
     world: hub

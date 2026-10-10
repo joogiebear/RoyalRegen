@@ -10,15 +10,11 @@ import java.util.Map;
 import java.util.logging.Logger;
 
 /**
- * What finishing a brush on a suspicious block pays out.
+ * What finishing a brush on a suspicious block pays out. The maths is static so it can be tested
+ * without a server.
  *
- * <p>The chance and command maths lives here as plain static methods so it can be tested without a
- * server; {@link RegenListener} only feeds it the player, the tool and a random number.
- *
- * @param replaceVanillaLoot drop whatever vanilla item the brush would pop out, so the table below is
- *                           the whole reward
- * @param tools              percentage points added to every {@code bonus} drop, by tool id. A tool
- *                           that is not listed adds nothing
+ * @param replaceVanillaLoot discard the vanilla brush item, so this table is the whole reward
+ * @param tools              percentage points added to every {@code bonus} drop, by tool id
  * @param drops              rolled independently, so one brush can pay several or none
  * @param rare               rolled once per completed brush, or null
  */
@@ -39,7 +35,7 @@ public record Brush(boolean replaceVanillaLoot, Map<String, Double> tools, List<
     public record Rare(double chance, List<String> commands) {
     }
 
-    /** A brush section, or null when the block has none or it is switched off. */
+    // null when the block has no brush section or it is switched off
     static Brush load(ConfigurationSection sec, String zone, String block, Logger logger) {
         if (sec == null || !sec.getBoolean("enabled", true)) {
             return null;
@@ -54,7 +50,7 @@ public record Brush(boolean replaceVanillaLoot, Map<String, Double> tools, List<
                 if (raw instanceof Number bonus) {
                     tools.put(id.toLowerCase(Locale.ROOT), bonus.doubleValue());
                 } else {
-                    logger.warning(where + "brush tool '" + id + "' needs a number — ignoring it.");
+                    logger.warning(where + "brush tool '" + id + "' needs a number, ignoring it.");
                 }
             }
         }
@@ -63,7 +59,7 @@ public record Brush(boolean replaceVanillaLoot, Map<String, Double> tools, List<
         for (Map<?, ?> row : sec.getMapList("drops")) {
             List<String> commands = commands(row.get("commands"));
             if (commands.isEmpty()) {
-                logger.warning(where + "a brush drop has no commands — ignoring it.");
+                logger.warning(where + "a brush drop has no commands, ignoring it.");
                 continue;
             }
             Double chance = percent(row.get("chance"), where, logger);
@@ -83,7 +79,7 @@ public record Brush(boolean replaceVanillaLoot, Map<String, Double> tools, List<
         }
 
         if (drops.isEmpty() && rare == null) {
-            logger.warning(where + "brush is enabled but has no usable drops or rare-event — a brush"
+            logger.warning(where + "brush is enabled but has no usable drops or rare-event, so a brush"
                     + " would only regenerate the block.");
         }
         return new Brush(sec.getBoolean("replace-vanilla-loot", true), Map.copyOf(tools),
@@ -92,12 +88,12 @@ public record Brush(boolean replaceVanillaLoot, Map<String, Double> tools, List<
 
     private static Double percent(Object raw, String where, Logger logger) {
         if (!(raw instanceof Number number)) {
-            logger.warning(where + "brush chance '" + raw + "' isn't a number — ignoring that entry.");
+            logger.warning(where + "brush chance '" + raw + "' isn't a number, ignoring that entry.");
             return null;
         }
         double value = number.doubleValue();
         if (value < 0 || value > 100) {
-            logger.warning(where + "brush chance " + value + " is outside 0-100 — clamping it.");
+            logger.warning(where + "brush chance " + value + " is outside 0-100, clamping it.");
         }
         return Math.max(0, Math.min(100, value));
     }
@@ -133,7 +129,7 @@ public record Brush(boolean replaceVanillaLoot, Map<String, Double> tools, List<
 
     /**
      * The id the tool is looked up by: {@code ecoitems:<id>} for an EcoItem, otherwise the item's own
-     * key. Never "is it vanilla" — other plugins tag vanilla items too, so only EcoItems' own tag counts.
+     * key. Only EcoItems' own tag counts, since other plugins tag vanilla items too.
      *
      * @param ecoItemsId the value of the {@code ecoitems:item} tag, or null
      */

@@ -50,73 +50,37 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
-/**
- * Harvesting inside a regen zone, and keeping everything else in it intact.
- *
- * <p>Inside a zone this plugin is the authority: it allows the listed blocks and denies everything
- * else itself. It works with the world's protection in one of two ways, chosen by
- * {@code override-protection} in config.yml:
- *
- * <ul>
- *   <li><strong>Protection opened for the zone</strong> ({@code false}, the better setup). The
- *       protection plugin lets breaks through in the zone's area and this plugin does the denying.
- *       Nothing cancels a harvest, so collections, jobs and skills see it at every priority, and a
- *       break some other plugin cancelled (an anti-cheat, say) stays cancelled.</li>
- *   <li><strong>Protection left on</strong> ({@code true}, the default, which needs no setup). The
- *       protection plugin cancels the break and {@link #onBreak} revives it at {@code HIGHEST}. That
- *       works, but a listener before {@code HIGHEST} that skips cancelled events misses the harvest,
- *       the protection plugin may still show its "you can't break that" message, and any other
- *       plugin's cancellation is overridden along with it.</li>
- * </ul>
- */
+// Inside a zone this plugin allows the listed blocks and denies everything else. With
+// override-protection false the world's protection is opened for the zone and nothing cancels a
+// harvest; with true (the default) onBreak revives the protection plugin's cancellation at HIGHEST,
+// which also overrides any other plugin's cancellation.
 public final class RegenListener implements Listener {
 
-    /**
-     * How many connected logs to examine before giving up on finding a canopy. Generous, because
-     * hand-built trees are far larger than generated ones and the search stops the moment it finds
-     * a leaf - the limit is only reached by something that is genuinely not a tree.
-     */
+    // generous: hand-built trees are large, and the search stops at the first leaf
     private static final int TREE_SCAN_LIMIT = 512;
 
-    /**
-     * Plants that stand on the block below them, so breaking one pops every block of it above.
-     * Those upper blocks never fire a break event of their own.
-     */
+    // breaking one pops every block above it, and those never fire a break event of their own
     private static final Set<Material> STACKED = EnumSet.of(Material.SUGAR_CANE, Material.CACTUS,
             Material.BAMBOO, Material.KELP, Material.KELP_PLANT,
             Material.TWISTING_VINES, Material.TWISTING_VINES_PLANT);
 
-    /** Edit a zone's protected blocks without switching gamemode — same shape as the suite's others. */
+    /** Lets a player edit a zone's protected blocks without switching gamemode. */
     public static final String BYPASS = "royalregen.bypass";
 
-    /** How EcoItems marks an item: {@code ecoitems:item} holds the item's id. */
+    // EcoItems stores the item's id under ecoitems:item
     private static final NamespacedKey ECOITEMS_TAG = new NamespacedKey("ecoitems", "item");
 
     private final RoyalRegenPlugin plugin;
 
-    /**
-     * Set while this listener is breaking a block itself, so the felled logs do not each fell a
-     * tree of their own. Bukkit is single threaded, so a plain flag is enough - the scheduled task
-     * and the events it causes all run on the main thread within one tick.
-     */
+    // set while we break felled logs ourselves so they don't each fell a tree; main thread only
     private boolean felling;
 
     public RegenListener(RoyalRegenPlugin plugin) {
         this.plugin = plugin;
     }
 
-    /**
-     * Refuse a break that is not a harvest, as early as possible.
-     *
-     * <p>This runs at {@code LOWEST} rather than alongside the harvest below, because a refusal has
-     * to land before anything else reacts to the break. Skills, jobs and quest tasks listen around
-     * {@code NORMAL}; denying at {@code HIGHEST} let them award XP for a break that was then
-     * cancelled, so a player could stand at any protected block and farm progress off a block that
-     * never broke.
-     *
-     * <p>The three refusals are here together for that reason — a block still coming back, and a crop
-     * that has not grown, are equally "not a harvest" and would pay out just the same.
-     */
+    // LOWEST so refusals land before skills, jobs and quests (around NORMAL) award progress for a
+    // break that never happens
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     public void onBreakDeny(BlockBreakEvent event) {
         Block block = event.getBlock();
@@ -126,20 +90,19 @@ public final class RegenListener implements Listener {
         }
         Player player = event.getPlayer();
         if (editing(player)) {
-            return;                                      // building, not farming
+            return;
         }
 
         Zone.Rule rule = zone.rule(block.getType());
         if (rule == null) {
-            // Not harvestable here. This plugin denies it, because the world's protection has been
-            // opened up for this area — otherwise a farm would be a hole in the map's protection.
+            // the world's protection may be opened for this area, so we do the denying
             event.setCancelled(true);
             tell(player, "not-harvestable");
             return;
         }
         if (plugin.regen().isPending(block)) {
             event.setCancelled(true);
-            return;                                      // already harvested, waiting to come back
+            return;
         }
         if (rule.requireMature() && !isMature(block)) {
             event.setCancelled(true);
@@ -152,14 +115,7 @@ public final class RegenListener implements Listener {
         }
     }
 
-    /**
-     * Nothing may be hung inside a zone either.
-     *
-     * <p>Item frames and paintings are entities, not blocks, so the block placement rule above never
-     * sees them. On a map whose protection denies breaking them, being able to put them up is worse
-     * than it sounds: the decoration becomes permanent, and only someone who bypasses protection can
-     * take it down again.
-     */
+    // item frames and paintings are entities, so onPlace never sees them
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onHangingPlace(HangingPlaceEvent event) {
         Player player = event.getPlayer();
@@ -172,16 +128,8 @@ public final class RegenListener implements Listener {
         }
     }
 
-    /**
-     * Armour stands, for the same reason.
-     *
-     * <p>Handled separately because they are not hanging entities. This is also the only protection
-     * they get: WorldGuard has no armour stand flag, so once one exists anybody can break it. Not
-     * placing them is the whole defence.
-     *
-     * <p>Deliberately limited to armour stands. {@code EntityPlaceEvent} also covers boats, minecarts
-     * and end crystals, and a boat is transport rather than decoration.
-     */
+    // WorldGuard has no armour stand flag, so not placing them is their only protection. Boats and
+    // minecarts also come through here and are deliberately allowed.
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onEntityPlace(EntityPlaceEvent event) {
         if (event.getEntityType() != EntityType.ARMOR_STAND) {
@@ -197,37 +145,19 @@ public final class RegenListener implements Listener {
         }
     }
 
-    /**
-     * A refusal message, except for the logs a felling breaks on the player's behalf. They didn't
-     * swing at those, and a tree with a few refused logs would otherwise send a line for each one.
-     */
+    // silent for logs a felling breaks on the player's behalf, or a tree sends a line per refused log
     private void tell(Player player, String key) {
         if (!felling) {
             plugin.messages().send(player, key);
         }
     }
 
-    /** Creative players and bypass holders are editing the map, not farming it. */
     private static boolean editing(Player player) {
         return player.getGameMode() == GameMode.CREATIVE || player.hasPermission(BYPASS);
     }
 
-    /**
-     * Bring the rest of a tree down, a few logs per tick.
-     *
-     * <p>Spreading the work is the entire point. Felling a 150-log tree in one tick fires 150 block
-     * break effects at once, which the client renders as a single distorted crack — the reason this
-     * lives here rather than in a vein-mining effect, which has no way to pace itself.
-     *
-     * <p>Each log is broken <em>through the player</em>, so a real {@code BlockBreakEvent} fires for
-     * every one. That is what keeps skills, jobs and this plugin's own regeneration working on the
-     * whole tree instead of only the log that was swung at. Breaking the blocks directly would be
-     * silent and instant, and would also make the rest of the tree vanish for good.
-     *
-     * <p>Gated on a permission rather than on the tool. This plugin has no dependency on the item
-     * suite and cannot tell one axe from another; a permission is something the server already
-     * knows how to grant.
-     */
+    // A few logs per tick: a whole tree in one tick renders as one distorted crack. Each log is
+    // broken through the player so a real BlockBreakEvent fires and skills, jobs and regen all see it.
     private void fellTree(Player player, Zone zone, Block origin) {
         String permission = plugin.getConfig().getString("felling.permission", "royalregen.fell");
         if (permission != null && !permission.isBlank() && !player.hasPermission(permission)) {
@@ -254,7 +184,7 @@ public final class RegenListener implements Listener {
                 while (index < logs.size() && broken < perTick) {
                     Block next = logs.get(index++);
                     if (!Tag.LOGS.isTagged(next.getType())) {
-                        continue;                        // already gone, or regenerated under us
+                        continue;
                     }
                     felling = true;
                     try {
@@ -271,12 +201,8 @@ public final class RegenListener implements Listener {
         }.runTaskTimer(plugin, 1L, 1L);
     }
 
-    /**
-     * Logs connected to this one within the zone, upward and sideways, nearest first. Excludes the
-     * origin. A tree straddling the zone's edge is felled only up to the edge: past it no regen rule
-     * applies, so a log broken there would either be refused or, on an unprotected world, never
-     * come back.
-     */
+    // Upward and sideways, nearest first, origin excluded. Stops at the zone edge: a log past it
+    // would never come back.
     private static List<Block> connectedLogs(Zone zone, Block origin, int limit) {
         List<Block> found = new ArrayList<>();
         Set<Block> seen = new HashSet<>();
@@ -304,28 +230,9 @@ public final class RegenListener implements Listener {
         return found;
     }
 
-    /**
-     * Whether a log belongs to a living tree rather than something built out of the same block.
-     *
-     * <p>Spreads through connected logs looking for a canopy. An earlier version walked straight up
-     * and stopped at the first non-log, which is fine for a generated tree but wrong for a built
-     * one: hand-made trunks lean, taper, branch and stand two or three blocks thick, so the column
-     * directly above any given log is often air long before the leaves start. Every such tree was
-     * refused.
-     *
-     * <p>A radius check around the block would fail differently and worse — it has to pick between
-     * a radius too small for a trunk standing twenty blocks below its lowest leaf, and one so large
-     * that any wall near a tree reads as part of it.
-     *
-     * <p>The spread never goes downward. Canopies sit above trunks, so upward and sideways is all a
-     * tree needs, while a wall searched downward would reach the ground and wander into whatever
-     * else is connected there.
-     *
-     * <p>It remains a heuristic, because Minecraft cannot tell us a log's purpose. A post under a
-     * decorative canopy reads as a tree, and a wall built hard against a real trunk inherits it.
-     * Both err toward "harvestable" only where someone deliberately put the two together, and the
-     * block returns on the regen timer regardless.
-     */
+    // A log is part of a tree if connected logs lead up or sideways to leaves. Built trunks lean and
+    // branch, so a straight column check fails them. Never searches downward, or a wall would reach
+    // the ground and wander. A heuristic: a post under a decorative canopy also counts.
     private boolean partOfTree(Block block) {
         Set<Block> seen = new HashSet<>();
         Deque<Block> queue = new ArrayDeque<>();
@@ -338,7 +245,7 @@ public final class RegenListener implements Listener {
             scanned++;
 
             for (int dx = -1; dx <= 1; dx++) {
-                for (int dy = 0; dy <= 1; dy++) {        // never downward - see below
+                for (int dy = 0; dy <= 1; dy++) {
                     for (int dz = -1; dz <= 1; dz++) {
                         if (dx == 0 && dy == 0 && dz == 0) {
                             continue;
@@ -346,12 +253,9 @@ public final class RegenListener implements Listener {
                         Block next = current.getRelative(dx, dy, dz);
                         Material type = next.getType();
                         if (Tag.LEAVES.isTagged(type)) {
-                            return true;                 // reached a canopy
+                            return true;
                         }
-                        // A block this plugin is already regenerating is still part of the tree -
-                        // it is air only because someone just harvested it, and it is coming back.
-                        // Without this, felling from anywhere but the base severs the trunk from
-                        // its canopy and every log below the gap is refused until the timer runs.
+                        // a pending log is air for now but still links the trunk to its canopy
                         if ((Tag.LOGS.isTagged(type) || plugin.regen().isPending(next))
                                 && seen.add(next)) {
                             queue.add(next);
@@ -363,50 +267,13 @@ public final class RegenListener implements Listener {
         return false;
     }
 
-    /**
-     * Harvest a listed block and schedule its return.
-     *
-     * <p>Runs late and deliberately <strong>not</strong> {@code ignoreCancelled}. With
-     * {@code override-protection} on, the world's protection has usually cancelled the break by the
-     * time it gets here, and a handler that skipped cancelled events would simply never run. Reviving
-     * it is how the block list becomes the permission in that setup. With it off, a cancelled break
-     * is left alone — see the class comment for which setup to prefer.
-     *
-     * <p>That means the refusals in {@link #onBreakDeny} can no longer be relied on to have removed
-     * anything, since a cancelled event still arrives here. Every one of them is re-checked below
-     * before the event is revived, or a block that was refused for being unripe or still pending
-     * would be un-cancelled right back into a harvest.
-     *
-     * <p>Reviving overrides <em>any</em> plugin's cancellation, not only the world protection's, so a
-     * listed block inside a zone cannot be protected from harvesting by something else — an
-     * anti-cheat's cancelled fast-break included. Servers that can open their protection for the
-     * zone should turn {@code override-protection} off for exactly this reason.
-     *
-     * <h2>Why an empty drop list means "leave it alone"</h2>
-     *
-     * <p>Suppressing vanilla drops does not merely replace them: {@code BlockDropItemEvent} is only
-     * fired when a break actually drops something, so turning drops off stops that event happening
-     * at all. Every perk that reads or modifies a drop list is then blind — Fortune and its
-     * relatives, reforge and talisman drop multipliers, telekinesis, and eco's DropQueue. They do
-     * not fail; they find nothing to multiply and quietly do nothing.
-     *
-     * <p>That is the worst shape a bug can take on a progression server. A player equips a reforge
-     * that promises double crops, farms a regen zone, gets exactly what they got before, and there
-     * is no error anywhere to explain it.
-     *
-     * <p>So with no {@code drops:} configured the vanilla pipeline is left completely untouched.
-     * Perks work with no integration code because nothing is being intercepted. Crops also get
-     * their real seed variance back, which a fixed list cannot express.
-     *
-     * <p>A configured {@code drops:} list still overrides, for blocks where vanilla is wrong. Be
-     * aware that it reintroduces exactly the problem above for that block — the drops are no longer
-     * vanilla drops, so nothing multiplies them. Use it where that is the point, not as a throttle;
-     * {@code regen-seconds} throttles without lying to the rest of the server.
-     */
+    // Not ignoreCancelled: with override-protection on, the world's protection has already
+    // cancelled the break and this revives it. Every refusal from onBreakDeny is re-checked first,
+    // or a refused block would be un-cancelled back into a harvest.
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void onBreak(BlockBreakEvent event) {
         if (event.isCancelled() && !plugin.overrideProtection()) {
-            return;                                      // someone else refused it; that stands
+            return;
         }
         Block block = event.getBlock();
         Zone zone = plugin.zoneAt(block);
@@ -415,23 +282,22 @@ public final class RegenListener implements Listener {
         }
         Player player = event.getPlayer();
         if (editing(player)) {
-            return;                                      // their break is an edit, not a harvest
+            return;
         }
         Zone.Rule rule = zone.rule(block.getType());
         if (rule == null) {
-            return;                                      // refused already; nothing to harvest
+            return;
         }
         if (plugin.regen().isPending(block)) {
-            return;                                      // refused already; still coming back
+            return;
         }
         if (rule.requireMature() && !isMature(block)) {
-            return;                                      // refused already; not grown yet
+            return;
         }
         if (rule.requireLeaves() && !partOfTree(block)) {
-            return;                                      // refused already; a build, not a tree
+            return;
         }
 
-        // A genuine harvest. Revive it past the world's protection - see above.
         event.setCancelled(false);
 
         plugin.regen().harvest(block, rule.regenMillis(), rule.placeholder());
@@ -440,38 +306,29 @@ public final class RegenListener implements Listener {
         if (rule.fell() && !felling) {
             fellTree(player, zone, block);
         }
+        // Keep vanilla drops unless a list is configured: suppressing them stops BlockDropItemEvent
+        // firing, which silently disables Fortune, telekinesis and drop multipliers.
         if (rule.drops().isEmpty()) {
-            return;                                      // vanilla drops stand — see above
+            return;
         }
 
-        event.setDropItems(false);                       // explicit override; vanilla replaced
+        event.setDropItems(false);
         for (ItemStack drop : rule.drops()) {
             block.getWorld().dropItemNaturally(block.getLocation().add(0.5, 0.2, 0.5), drop.clone());
         }
     }
 
-    /**
-     * A player finished brushing a suspicious block: pay out the zone's table and start its regrowth.
-     *
-     * <p>Paper has no brush event. What the server does fire, in {@code BrushableBlockEntity#brush}, is
-     * {@link EntityChangeBlockEvent} for the brushing player — on every dust stage, and once more when the
-     * block turns into plain sand or gravel, which is the one whose new block data is no longer
-     * {@link Brushable}. It fires before the loot is dropped and whether or not the block has any, so it
-     * catches the regenerated blocks that have no loot table, where {@link BlockDropItemEvent} would never
-     * fire.
-     *
-     * <p>Runs at {@code MONITOR} so a cancelled brush (WorldGuard's, an anti-cheat's) has already been
-     * refused and nothing is paid for it. There is deliberately no revival here as there is for breaks:
-     * protection has to be opened for the zone (see the README), not bypassed.
-     */
+    // Paper has no brush event. EntityChangeBlockEvent fires on every dust stage; the finish is the
+    // one whose new data is no longer Brushable. It fires even with no loot table, unlike
+    // BlockDropItemEvent. MONITOR so a cancelled brush pays nothing; there is no revival here.
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onBrush(EntityChangeBlockEvent event) {
         if (!(event.getEntity() instanceof Player player) || event.getBlockData() instanceof Brushable) {
-            return;                                      // not a player, or a stroke rather than the finish
+            return;
         }
         Block block = event.getBlock();
         if (!(block.getBlockData() instanceof Brushable) || editing(player)) {
-            return;                                      // not suspicious, or an edit rather than a dig
+            return;
         }
         Zone zone = plugin.zoneAt(block);
         Zone.Rule rule = zone == null ? null : zone.rule(block.getType());
@@ -483,12 +340,7 @@ public final class RegenListener implements Listener {
         plugin.regen().harvestBrushed(block, rule.regenMillis(), rule.placeholder());
     }
 
-    /**
-     * Drop the vanilla item a brush would pop out, when the block asks for it.
-     *
-     * <p>Only a block generated with a loot table has one; a regenerated block has none. Cancelling this
-     * event is what discards it — the server spawns the item only if nobody cancels.
-     */
+    // cancelling discards the vanilla brush loot (only blocks generated with a loot table have any)
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onBrushDrop(BlockDropItemEvent event) {
         if (!(event.getBlockState() instanceof BrushableBlock) || editing(event.getPlayer())) {
@@ -501,7 +353,6 @@ public final class RegenListener implements Listener {
         }
     }
 
-    /** Roll the table for one finished brush and run what hit. */
     private void payOut(Player player, Block block, Brush brush) {
         ItemStack held = player.getActiveItem();
         if (held.getType().isAir()) {
@@ -542,13 +393,7 @@ public final class RegenListener implements Listener {
         }
     }
 
-    /**
-     * Record the rest of a sugar cane, cactus, bamboo or kelp stack above a harvested block.
-     *
-     * <p>Only the broken block fires an event; the ones above simply pop on the next physics update.
-     * Recording them here is what brings the whole plant back — without it, cutting a cane at the
-     * base restored one block and left the rest of the field a stubble of single canes.
-     */
+    // the blocks above pop on physics without an event, so record them here or only one comes back
     private void harvestStackAbove(Zone zone, Block block, long regenMillis) {
         if (!STACKED.contains(block.getType())) {
             return;
@@ -560,12 +405,7 @@ public final class RegenListener implements Listener {
         }
     }
 
-    /**
-     * Nothing may be placed inside a zone.
-     *
-     * <p>The area's protection is relaxed so harvesting can work, so building has to be denied here
-     * instead — otherwise opening a farm would also open it to being built over.
-     */
+    // the area's protection may be opened for harvesting, so building is denied here
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onPlace(BlockPlaceEvent event) {
         if (editing(event.getPlayer())) {
@@ -577,14 +417,8 @@ public final class RegenListener implements Listener {
         }
     }
 
-    /**
-     * No pouring or scooping liquids inside a zone.
-     *
-     * <p>A bucket is not a {@code BlockPlaceEvent}, so the placement rule above never saw one. Poured
-     * water washes crops off their farmland without breaking them — no event, so nothing is recorded
-     * and nothing comes back — and lava does the same to anything that burns. Scooping up a farm's
-     * irrigation is the quieter version: the soil dries, the crops pop, and the field is gone for good.
-     */
+    // Buckets aren't BlockPlaceEvents. Poured liquid or removed irrigation pops crops without a
+    // break event, so they would never come back.
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onBucketEmpty(PlayerBucketEmptyEvent event) {
         denyBucket(event);
@@ -594,7 +428,7 @@ public final class RegenListener implements Listener {
     public void onBucketFill(PlayerBucketFillEvent event) {
         ItemStack result = event.getItemStack();
         if (result != null && result.getType() == Material.MILK_BUCKET) {
-            return;                                      // milking a cow, not taking the water
+            return;                                      // milking a cow
         }
         denyBucket(event);
     }
@@ -609,10 +443,7 @@ public final class RegenListener implements Listener {
         }
     }
 
-    /**
-     * Mobs don't trample a zone's farmland either. Theirs arrives as an entity interact, not the
-     * player's {@code PHYSICAL} one handled in {@link #onTrample}.
-     */
+    // mob trampling arrives as an entity interact, not the player's PHYSICAL one
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onEntityTrample(EntityInteractEvent event) {
         Block block = event.getBlock();
@@ -621,10 +452,7 @@ public final class RegenListener implements Listener {
         }
     }
 
-    /**
-     * A zone's farmland doesn't dry back to dirt. Dirt pops the crop on it, and that crop was never
-     * broken, so it would never come back.
-     */
+    // dried farmland pops its crop without a break, so the crop would never come back
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onFarmlandDry(BlockFadeEvent event) {
         Block block = event.getBlock();
@@ -633,14 +461,8 @@ public final class RegenListener implements Listener {
         }
     }
 
-    /**
-     * Leaves inside a zone never decay.
-     *
-     * <p>Felling a tree cuts its leaves off from any log, and natural leaves then decay within a
-     * minute or two. The logs come back on the regen timer, but by then the canopy is gone — and a
-     * trunk with no canopy fails {@code require-leaves}, so every tree in a lumber zone was
-     * harvestable exactly once. Leaves are scenery here like everything else in a zone.
-     */
+    // felled logs leave the canopy unattached; decayed leaves would make the regrown trunk fail
+    // require-leaves
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onLeavesDecay(LeavesDecayEvent event) {
         if (plugin.zoneAt(event.getBlock()) != null) {
@@ -648,13 +470,7 @@ public final class RegenListener implements Listener {
         }
     }
 
-    /**
-     * Stop farmland being trampled inside a zone.
-     *
-     * <p>Trampling isn't a break — it arrives as a PHYSICAL interact — so nothing above catches it.
-     * Without this, a farm's soil turns to dirt the first time someone runs across it, and no amount of
-     * block regeneration brings it back because no block was ever broken.
-     */
+    // trampling is a PHYSICAL interact, not a break, so regen would never restore the soil
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onTrample(PlayerInteractEvent event) {
         if (event.getAction() != Action.PHYSICAL) {
@@ -666,32 +482,26 @@ public final class RegenListener implements Listener {
         }
     }
 
-    /** Announce a zone as the player walks into it. */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onMove(PlayerMoveEvent event) {
-        // Only when they actually change block — this event fires for every look and step otherwise.
         if (sameBlock(event.getFrom(), event.getTo())) {
             return;
         }
         plugin.discovery().update(event.getPlayer(), event.getTo());
     }
 
-    /**
-     * And as they teleport into one. A teleport has its own handler list, so {@link #onMove} never
-     * sees it — without this, arriving by /warp announced nothing until the first step.
-     */
+    // teleports have their own handler list, so onMove never sees them
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onTeleport(PlayerTeleportEvent event) {
         plugin.discovery().update(event.getPlayer(), event.getTo());
     }
 
-    /** And when they log in standing in one. */
     @EventHandler(priority = EventPriority.MONITOR)
     public void onJoin(PlayerJoinEvent event) {
         plugin.discovery().update(event.getPlayer(), event.getPlayer().getLocation());
     }
 
-    /** And when they ride into one; a passenger's movement doesn't fire a player move. */
+    // a passenger's movement doesn't fire a player move
     @EventHandler(priority = EventPriority.MONITOR)
     public void onVehicleMove(VehicleMoveEvent event) {
         if (sameBlock(event.getFrom(), event.getTo())) {

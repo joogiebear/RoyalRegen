@@ -22,10 +22,10 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
-/** {@code /royalregen reload|status|pos1|pos2|create} — admin tools, including in-game zone creation. */
+/** {@code /royalregen reload|status|pos1|pos2|create}: admin tools, including in-game zone creation. */
 public final class RoyalRegenCommand implements CommandExecutor, TabCompleter, Listener {
 
-    /** Zone ids become config keys, so they are restricted to what a key can safely be. */
+    // zone ids become config keys
     private static final Pattern ZONE_ID = Pattern.compile("[a-z0-9_-]{1,32}");
 
     private final RoyalRegenPlugin plugin;
@@ -55,7 +55,7 @@ public final class RoyalRegenCommand implements CommandExecutor, TabCompleter, L
                         + "&7 zone(s), &f" + plugin.regen().pendingCount() + "&7 block(s) waiting to return"));
                 for (Zone zone : plugin.zones()) {
                     sender.sendMessage(Text.chat("  &8· &e" + zone.id() + " &7in &f" + zone.world()
-                            + "&7 — " + zone.blockCount() + " block type(s), "
+                            + "&7: " + zone.blockCount() + " block type(s), "
                             + (zone.regenMillis() / 1000) + "s regen"));
                 }
             }
@@ -79,16 +79,8 @@ public final class RoyalRegenCommand implements CommandExecutor, TabCompleter, L
                 + "&7 in &f" + at.getWorld().getName() + "&7."));
     }
 
-    /**
-     * {@code /royalregen create <id> [regen-seconds]} — write a zone from the stored corners straight
-     * into config.yml and load it live. The config workflow the file used to prescribe (read corners
-     * off the F3 screen, type them into YAML, reload) is exactly the part a command should do.
-     *
-     * <p>The block list is seeded from the block the admin is looking at — stand in the field, look
-     * at the wheat, create — with {@code require-mature} set when it's a crop (not merely something
-     * with an age, like sugar cane). More blocks are added
-     * in config, where each one's options are documented.
-     */
+    // Writes a zone from the stored corners into config.yml and loads it. The block list is seeded
+    // from the block the admin is looking at, with require-mature set for crops.
     private void create(CommandSender sender, String[] args) {
         if (!(sender instanceof Player player)) {
             sender.sendMessage(Text.chat("&cOnly players can create zones."));
@@ -100,10 +92,8 @@ public final class RoyalRegenCommand implements CommandExecutor, TabCompleter, L
             return;
         }
         String id = args[1].toLowerCase(Locale.ROOT);
-        // Start from what is on disk now. The copy in memory is whatever the last reload read, and
-        // saving it would silently throw away any edit the admin made to config.yml since then.
-        // Parse it on the side first: a file that fails to parse reloads as empty, and saving that
-        // would wipe every other zone.
+        // Reload from disk so saving doesn't discard the admin's edits, but parse it on the side
+        // first: a broken file reloads as empty, and saving that would wipe every other zone.
         java.io.File file = new java.io.File(plugin.getDataFolder(), "config.yml");
         if (file.exists()) {
             try {
@@ -126,13 +116,13 @@ public final class RoyalRegenCommand implements CommandExecutor, TabCompleter, L
             return;
         }
         if (a.getWorld() == null || !a.getWorld().equals(b.getWorld())) {
-            sender.sendMessage(Text.chat("&cYour two corners are in different worlds — set them again."));
+            sender.sendMessage(Text.chat("&cYour two corners are in different worlds. Set them again."));
             return;
         }
         Block looking = player.getTargetBlockExact(6);
         if (looking == null || looking.getType().isAir() || !looking.getType().isSolid()
                 && !(looking.getBlockData() instanceof org.bukkit.block.data.Ageable)) {
-            sender.sendMessage(Text.chat("&cLook at the block players should harvest here — it seeds"
+            sender.sendMessage(Text.chat("&cLook at the block players should harvest here. It seeds"
                     + " the zone's block list."));
             return;
         }
@@ -173,7 +163,6 @@ public final class RoyalRegenCommand implements CommandExecutor, TabCompleter, L
                 + id + ".blocks&7 in config.yml, then &f/royalregen reload&7."));
     }
 
-    /** Corners are a session's scratch work; drop them when the admin leaves. */
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         pos1.remove(event.getPlayer().getUniqueId());
