@@ -1,23 +1,26 @@
 package com.mystipixel.royalregen;
 
+import com.mystipixel.royalregen.util.DataFiles;
+import com.mystipixel.royalregen.util.SnapshotWriter;
 import com.mystipixel.royalregen.util.Text;
 import net.kyori.adventure.title.Title;
 import org.bukkit.Location;
-import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 
 import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Announces a zone when a player walks into it, and remembers which ones they've found. The first
@@ -28,13 +31,14 @@ public final class DiscoveryService {
     private final RoyalRegenPlugin plugin;
     private final Map<UUID, String> currentZone = new HashMap<>();
     private final Map<UUID, Set<String>> discovered = new HashMap<>();
-    private final File file;
+    private final SnapshotWriter<Map<String, List<String>>> writer;
     private boolean dirty;
 
     public DiscoveryService(RoyalRegenPlugin plugin) {
         this.plugin = plugin;
-        this.file = new File(plugin.getDataFolder(), "discovered.yml");
-        load();
+        File file = new File(plugin.getDataFolder(), "discovered.yml");
+        discovered.putAll(readEntries(file, plugin.getLogger()));
+        this.writer = new SnapshotWriter<>(file, plugin.getLogger(), DiscoveryService::serialise);
     }
 
     /** Called as a player changes block, joins or teleports. Cheap when the zone hasn't changed. */
@@ -81,35 +85,70 @@ public final class DiscoveryService {
         currentZone.remove(player.getUniqueId());       // discoveries are kept
     }
 
-    private void load() {
+    // an unreadable file is copied aside before the next save replaces it, and nothing from it is loaded
+    static Map<UUID, Set<String>> readEntries(File file, Logger logger) {
         if (!file.exists()) {
-            return;
+            return Map.of();
         }
-        FileConfiguration cfg = YamlConfiguration.loadConfiguration(file);
-        for (String key : cfg.getKeys(false)) {
-            try {
-                discovered.put(UUID.fromString(key), new HashSet<>(cfg.getStringList(key)));
-            } catch (IllegalArgumentException notAUuid) {
-                plugin.getLogger().warning("discovered.yml has an entry that isn't a player id: " + key);
+        String problem;
+        try {
+            // the old in-place save left an empty file when the server died mid-write; a real save never does
+            if (file.length() == 0) {
+                problem = "it is empty";
+            } else {
+                YamlConfiguration yaml = DataFiles.load(file);
+                Map<UUID, Set<String>> entries = new HashMap<>();
+                for (String key : yaml.getKeys(false)) {
+                    try {
+                        entries.put(UUID.fromString(key), new HashSet<>(yaml.getStringList(key)));
+                    } catch (IllegalArgumentException notAUuid) {
+                        logger.warning(file.getName() + " has an entry that isn't a player id: " + key);
+                    }
+                }
+                return entries;
             }
+        } catch (IOException | InvalidConfigurationException e) {
+            problem = "it could not be read (" + e.getMessage() + ")";
         }
+        try {
+            File copy = DataFiles.keepCorruptCopy(file);
+            logger.severe(file.getName() + " is damaged: " + problem + ". No discoveries were loaded, so players"
+                    + " will see the first-visit title again. The damaged file was kept as " + copy.getName() + ".");
+        } catch (IOException copyFailed) {
+            logger.log(Level.SEVERE, file.getName() + " is damaged: " + problem + ". No discoveries were loaded,"
+                    + " and a copy could not be kept, so the next save will overwrite it. Back it up now if you"
+                    + " want to recover it by hand.", copyFailed);
+        }
+        return Map.of();
     }
 
-    /** Called every few seconds and on shutdown; only writes when something new was found. */
-    public void save() {
-        if (!dirty) {
-            return;
+    // sorted copies, so an unchanged map compares equal and the writer skips it
+    private Map<String, List<String>> snapshot() {
+        Map<String, List<String>> copy = new TreeMap<>();
+        discovered.forEach((id, zones) -> copy.put(id.toString(), zones.stream().sorted().toList()));
+        return Map.copyOf(copy);
+    }
+
+    static String serialise(Map<String, List<String>> snapshot) {
+        if (snapshot.isEmpty()) {
+            return "{}\n";                     // an empty file reads as damaged on the next start
         }
         YamlConfiguration out = new YamlConfiguration();
-        discovered.forEach((id, zones) -> {
-            List<String> list = new ArrayList<>(zones);
-            out.set(id.toString(), list);
-        });
-        try {
-            out.save(file);
-            dirty = false;
-        } catch (IOException e) {
-            plugin.getLogger().log(Level.WARNING, "Could not save discovered.yml", e);
+        new TreeMap<>(snapshot).forEach(out::set);
+        return out.saveToString();
+    }
+
+    /** Called every few seconds; hands a snapshot to the background writer when something new was found. */
+    public void save() {
+        if (!dirty && !writer.lastWriteFailed()) {
+            return;
         }
+        writer.submit(snapshot());
+        dirty = false;
+    }
+
+    /** Write discovered.yml synchronously and stop the writer. Called on shutdown. */
+    public void close() {
+        writer.close(snapshot());
     }
 }
