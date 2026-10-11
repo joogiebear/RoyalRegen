@@ -1,15 +1,25 @@
 package com.mystipixel.royalregen;
 
+import com.mystipixel.royalregen.util.DataFiles;
+import com.mystipixel.royalregen.util.SnapshotWriter;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.Ageable;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.Brushable;
+import org.bukkit.configuration.InvalidConfigurationException;
+import org.bukkit.configuration.file.YamlConfiguration;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Remembers what a harvested block used to be and puts it back. Main thread only. Insertion order
@@ -30,8 +40,9 @@ public final class RegenService {
     private final RoyalRegenPlugin plugin;
     private final Map<Spot, Pending> pending = new LinkedHashMap<>();
 
-    // set on every change to pending; the write-behind save only touches disk when true
+    // set on every change to pending; the write-behind save only snapshots when true
     private boolean dirty;
+    private SnapshotWriter<List<String>> writer;
 
     public RegenService(RoyalRegenPlugin plugin) {
         this.plugin = plugin;
@@ -157,42 +168,52 @@ public final class RegenService {
         return n;
     }
 
-    /** Write the pending map to disk if it changed since the last save, so a crash loses nothing. */
-    public void savePendingIfDirty(java.io.File file) {
-        if (!dirty) {
+    /**
+     * Snapshot the pending map if it changed since the last save and hand it to the background writer, so
+     * a crash loses nothing. Main thread only; the YAML dump and the disk write happen off it.
+     */
+    public void savePendingIfDirty() {
+        if (writer == null || (!dirty && !writer.lastWriteFailed())) {
             return;
         }
-        org.bukkit.configuration.file.YamlConfiguration out =
-                new org.bukkit.configuration.file.YamlConfiguration();
-        java.util.List<String> rows = new java.util.ArrayList<>(pending.size());
+        writer.submit(snapshot());
+        dirty = false;
+    }
+
+    /** Write the pending map synchronously and stop the writer. Called on shutdown. */
+    public void closePending() {
+        if (writer != null) {
+            writer.close(snapshot());
+            writer = null;
+        }
+    }
+
+    private List<String> snapshot() {
+        List<String> rows = new ArrayList<>(pending.size());
         for (var entry : pending.entrySet()) {
             Spot at = entry.getKey();
             rows.add(at.world() + "|" + at.x() + "|" + at.y() + "|"
                     + at.z() + "|" + entry.getValue().dueAt() + "|"
                     + entry.getValue().original().getAsString());
         }
+        return List.copyOf(rows);
+    }
+
+    static String serialise(List<String> rows) {
+        YamlConfiguration out = new YamlConfiguration();
         out.set("pending", rows);
-        try {
-            out.save(file);
-            dirty = false;
-        } catch (java.io.IOException e) {
-            plugin.getLogger().warning("Could not save pending.yml: a crash from here loses "
-                    + rows.size() + " pending restore(s): " + e.getMessage());
-        }
+        return out.saveToString();
     }
 
     /**
-     * Load restores left behind by an unclean shutdown. Rows for worlds not loaded yet are kept:
-     * another plugin often loads them later.
+     * Load restores left behind by an unclean shutdown and start the background writer for {@code file}.
+     * Rows for worlds not loaded yet are kept: another plugin often loads them later.
      */
-    public void loadPending(java.io.File file) {
-        if (!file.exists()) {
-            return;
-        }
+    public void loadPending(File file) {
+        writer = new SnapshotWriter<>(file, plugin.getLogger(), RegenService::serialise);
         int queued = 0;
         Set<String> missingWorlds = new TreeSet<>();
-        for (String row : org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(file)
-                .getStringList("pending")) {
+        for (String row : readRows(file, plugin.getLogger())) {
             String[] parts = row.split("\\|", 6);
             if (parts.length != 6) {
                 plugin.getLogger().warning("pending.yml has a malformed row: " + row);
@@ -220,6 +241,35 @@ public final class RegenService {
             plugin.getLogger().info("Some recovered restores are in worlds that aren't loaded yet "
                     + missingWorlds + "; they return once those worlds load.");
         }
+    }
+
+    // an unreadable file is copied aside before the next save replaces it, and its rows are not loaded
+    static List<String> readRows(File file, Logger logger) {
+        if (!file.exists()) {
+            return List.of();
+        }
+        String problem;
+        try {
+            // the old in-place save left an empty file when the server died mid-write; a real save never does
+            if (file.length() == 0) {
+                problem = "it is empty";
+            } else {
+                return DataFiles.load(file).getStringList("pending");
+            }
+        } catch (IOException | InvalidConfigurationException e) {
+            problem = "it could not be read (" + e.getMessage() + ")";
+        }
+        try {
+            File copy = DataFiles.keepCorruptCopy(file);
+            logger.severe(file.getName() + " is damaged: " + problem + ". No pending restores were loaded, so "
+                    + "blocks harvested before the last shutdown will not come back on their own. The damaged "
+                    + "file was kept as " + copy.getName() + ".");
+        } catch (IOException copyFailed) {
+            logger.log(Level.SEVERE, file.getName() + " is damaged: " + problem + ". No pending restores were "
+                    + "loaded, and a copy could not be kept, so the next save will overwrite it. Back it up now "
+                    + "if you want to recover it by hand.", copyFailed);
+        }
+        return List.of();
     }
 
     // false when the world or chunk isn't loaded, so the caller retries later
