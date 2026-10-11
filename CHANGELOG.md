@@ -1,3 +1,8 @@
+## 2026.41.1 - 2026-10-11
+
+### Fixes
+- write pending.yml atomically and off the main thread (`62ef4c7`)
+
 ## 2026.41.0 - 2026-10-10
 
 ### Features
