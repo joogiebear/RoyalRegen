@@ -1,5 +1,6 @@
 # RoyalRegen - player-facing text.
 # Delete a line to use its built-in wording, or empty it ("") to silence that message.
+# Placeholders look like %zones%.
 
 prefix: ""
 
@@ -17,3 +18,33 @@ no-building: "&cYou can't build here."
 
 # /royalregen reload
 reloaded: "&aRoyalRegen reloaded &f%zones%&a zone(s)."
+
+# Used for a zone in config.yml that leaves these out. %id% is the zone id, %name% its display-name.
+# display-name is also what /royalregen create writes for a new zone.
+zone-defaults:
+  display-name: "&f%id%"
+  discovery-title: "&6%name%"
+  discovery-subtitle: "&7Discovered"
+
+# /royalregen admin command output (sent without the prefix).
+admin:
+  no-permission: "&cYou don't have permission to do that."
+  usage: "&cUsage: &e/%label% reload|status|pos1|pos2|create <id> [regen-seconds]"
+  status:
+    header: "&6RoyalRegen &8» &f%zones%&7 zone(s), &f%pending%&7 block(s) waiting to return"
+    zone: "  &8· &e%zone% &7in &f%world%&7: %blocks% block type(s), %seconds%s regen"
+  corner:
+    players-only: "&cOnly players can set corners."
+    # %corner% is 1 or 2
+    set: "&6RoyalRegen &8» &7Corner &f%corner%&7 set to &f%x%, %y%, %z%&7 in &f%world%&7."
+  create:
+    players-only: "&cOnly players can create zones."
+    usage: "&cUsage: &e/royalregen create <id> [regen-seconds] &7(id: a-z, 0-9, _ and -)"
+    config-broken: "&cconfig.yml doesn't parse right now, so the zone wasn't saved. Fix it first: &e%error%"
+    exists: "&cA zone called '&e%zone%&c' already exists in config.yml."
+    no-corners: "&cSet both corners first: &e/royalregen pos1 &cand &e/royalregen pos2&c."
+    different-worlds: "&cYour two corners are in different worlds. Set them again."
+    no-target: "&cLook at the block players should harvest here. It seeds the zone's block list."
+    bad-seconds: "&cregen-seconds must be a number."
+    done: "&6RoyalRegen &8» &aZone '&e%zone%&a' created and live: &f%block%&a on a %seconds%s timer."
+    hint: "&7Add more blocks (and drops/felling options) under &fzones.%zone%.blocks&7 in config.yml, then &f/royalregen reload&7."
