@@ -50,7 +50,7 @@ public final class RoyalRegenPlugin extends JavaPlugin {
         // crash safety: recover what an unclean shutdown left, then write behind on change
         java.io.File pendingFile = new java.io.File(getDataFolder(), "pending.yml");
         regen.loadPending(pendingFile);
-        getServer().getScheduler().runTaskTimer(this, () -> regen.savePendingIfDirty(pendingFile), 100L, 100L);
+        getServer().getScheduler().runTaskTimer(this, regen::savePendingIfDirty, 100L, 100L);
         getServer().getScheduler().runTaskTimer(this, discovery::save, 100L, 100L);
 
         setupMetrics();
@@ -75,7 +75,7 @@ public final class RoyalRegenPlugin extends JavaPlugin {
                 getLogger().info("Restored " + restored + " harvested block(s) before shutdown.");
             }
             // only restores for unloaded worlds are left; this keeps them for the next start
-            regen.savePendingIfDirty(new java.io.File(getDataFolder(), "pending.yml"));
+            regen.closePending();
         }
     }
 
