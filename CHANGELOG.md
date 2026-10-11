@@ -1,3 +1,9 @@
+## 2026.41.2 - 2026-10-11
+
+### Fixes
+- write discovered.yml atomically on the background writer (`08420ba`)
+- default override-protection to false and ignore it for whole-world zones (`1916c84`)
+
 ## 2026.41.1 - 2026-10-11
 
 ### Fixes
