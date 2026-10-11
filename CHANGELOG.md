@@ -1,3 +1,18 @@
+## 2026.41.0 - 2026-10-10
+
+### Features
+- pay out and regenerate suspicious blocks when a brush finishes (`8744a78`)
+- show a placeholder block while a harvest regrows (`e291237`)
+
+### Fixes
+- use the ISO week-year for release versions (`7699f15`)
+
+### Refactors
+- read all player-facing text from config (`d0fa15e`)
+
+### Documentation
+- add AGENTS.md with the suite's development standards (`d37d7a9`)
+
 ## 2026.39.1 — 2026-09-24
 
 ### ✨ Features
