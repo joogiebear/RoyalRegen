@@ -14,12 +14,15 @@
 # 'drops': overriding drops stops BlockDropItemEvent, so Fortune, telekinesis and
 # drop multipliers silently stop working.
 
-# true:  keep your protection plugin denying breaks; RoyalRegen revives harvests
-#        of listed blocks. No setup, but plugins that skip cancelled breaks may
-#        miss harvests, and a break an anti-cheat cancelled is revived too.
 # false: open protection for each zone's area (e.g. a WorldGuard region allowing
-#        block-break) and let RoyalRegen deny there. Recommended where you can.
-override-protection: true
+#        block-break) and let RoyalRegen deny there. Anything another plugin
+#        cancels stays cancelled.
+# true:  keep your protection plugin denying breaks; RoyalRegen un-cancels breaks
+#        of listed blocks. It can't tell who cancelled, so players can also break
+#        listed blocks other plugins protect (islands, claims, minion fields), and
+#        a break an anti-cheat cancelled goes through too. Only zones with min and
+#        max are affected; whole-world zones ignore it and a warning is logged.
+override-protection: false
 
 # For logs with 'fell: true': breaking one brings the rest of the connected tree
 # down, a few logs per tick, and never past the edge of the zone.

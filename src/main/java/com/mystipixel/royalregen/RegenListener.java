@@ -51,9 +51,9 @@ import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
 // Inside a zone this plugin allows the listed blocks and denies everything else. With
-// override-protection false the world's protection is opened for the zone and nothing cancels a
-// harvest; with true (the default) onBreak revives the protection plugin's cancellation at HIGHEST,
-// which also overrides any other plugin's cancellation.
+// override-protection false (the default) the world's protection is opened for the zone and nothing
+// cancels a harvest; with true onBreak revives the protection plugin's cancellation at HIGHEST in
+// cornered zones, which also overrides any other plugin's cancellation there.
 public final class RegenListener implements Listener {
 
     // generous: hand-built trees are large, and the search stops at the first leaf
@@ -272,12 +272,12 @@ public final class RegenListener implements Listener {
     // or a refused block would be un-cancelled back into a harvest.
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void onBreak(BlockBreakEvent event) {
-        if (event.isCancelled() && !plugin.overrideProtection()) {
-            return;
-        }
         Block block = event.getBlock();
         Zone zone = plugin.zoneAt(block);
         if (zone == null) {
+            return;
+        }
+        if (event.isCancelled() && !zone.revivesCancelledBreaks(plugin.overrideProtection())) {
             return;
         }
         Player player = event.getPlayer();

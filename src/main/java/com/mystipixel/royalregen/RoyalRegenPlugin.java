@@ -25,7 +25,7 @@ public final class RoyalRegenPlugin extends JavaPlugin {
     private RegenService regen;
     private MessageManager messages;
     private DiscoveryService discovery;
-    private boolean overrideProtection = true;
+    private boolean overrideProtection;
 
     @Override
     public void onEnable() {
@@ -92,7 +92,7 @@ public final class RoyalRegenPlugin extends JavaPlugin {
     /** Re-read the zones. Invalid entries are skipped with a reason rather than being fatal. */
     public void reloadZones() {
         reloadConfig();
-        overrideProtection = getConfig().getBoolean("override-protection", true);
+        overrideProtection = getConfig().getBoolean("override-protection", false);
         zones.clear();
         ConfigurationSection section = getConfig().getConfigurationSection("zones");
         if (section == null) {
@@ -111,6 +111,24 @@ public final class RoyalRegenPlugin extends JavaPlugin {
                 zones.add(zone);
             }
         }
+        String warning = overrideIgnoredWarning(overrideProtection, zones);
+        if (warning != null) {
+            getLogger().warning(warning);
+        }
+    }
+
+    static String overrideIgnoredWarning(boolean overrideProtection, List<Zone> zones) {
+        if (!overrideProtection) {
+            return null;
+        }
+        List<String> ids = zones.stream().filter(Zone::wholeWorld).map(Zone::id).toList();
+        if (ids.isEmpty()) {
+            return null;
+        }
+        return "override-protection is true, but it is ignored for whole-world zone(s) " + String.join(", ", ids)
+                + ". A zone without min and max covers islands, claims and minion fields, so breaks other"
+                + " plugins cancel there stay cancelled. Give the zone corners, or open your protection"
+                + " for it and set override-protection: false.";
     }
 
     /** The zone containing this block, or null. */

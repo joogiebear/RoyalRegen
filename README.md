@@ -21,13 +21,16 @@ beside it.
 
 There are two ways to run it alongside a protection plugin, chosen by `override-protection`:
 
-- **`true` (default, no setup):** leave protection denying everywhere. RoyalRegen revives a harvest of a
-  listed block after protection cancels it. Some jobs/skills setups may miss harvests (they skip
-  cancelled breaks), the protection plugin may still show its "can't break" message, and a break an
-  anti-cheat cancelled is revived as well.
-- **`false` (recommended where you can):** open your protection for each zone's area (for example a
-  WorldGuard region allowing `block-break`) and let RoyalRegen do the denying there. Harvests are never
-  cancelled, so every plugin sees them, and anything another plugin cancels stays cancelled.
+- **`false` (default):** open your protection for each zone's area (for example a WorldGuard region
+  allowing `block-break`) and let RoyalRegen do the denying there. Harvests are never cancelled, so every
+  plugin sees them, and anything another plugin cancels stays cancelled.
+- **`true`:** leave protection denying everywhere. RoyalRegen un-cancels a break of a listed block after
+  protection cancels it. It can't tell which plugin cancelled, so players can also break listed blocks
+  that other plugins protect, such as island crops, claims and minion fields. A break an anti-cheat
+  cancelled goes through as well, some jobs/skills setups may miss harvests (they skip cancelled breaks),
+  and the protection plugin may still show its "can't break" message. This only applies to zones with
+  `min` and `max`: whole-world zones ignore it, and RoyalRegen logs a warning naming each one on start-up
+  and reload.
 
 When a listed block is broken:
 
