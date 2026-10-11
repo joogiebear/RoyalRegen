@@ -67,7 +67,7 @@ public final class RoyalRegenPlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         if (discovery != null) {
-            discovery.save();
+            discovery.close();
         }
         if (regen != null) {
             int restored = regen.restoreAll();
