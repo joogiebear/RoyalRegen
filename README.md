@@ -80,7 +80,8 @@ Block names work with or without the `minecraft:` namespace. Per-block options:
 | `brush` | Suspicious sand and gravel: what a finished brush pays out — see [Archaeology](#archaeology). |
 
 Each zone can also announce itself when a player walks, rides or teleports in — a title on the first
-visit, the display name after that. Set `discovery.enabled: false` to turn that off.
+visit, the display name after that. Set `discovery.enabled: false` to turn that off. A zone without its own
+`display-name`, `discovery.title` or `discovery.subtitle` uses `zone-defaults` in `messages.yml`.
 
 Give zones a generous vertical range if the terrain is uneven; fields terraced down a hillside will
 otherwise lose their lower rows.

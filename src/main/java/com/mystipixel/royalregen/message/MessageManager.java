@@ -2,50 +2,74 @@ package com.mystipixel.royalregen.message;
 
 import com.mystipixel.royalregen.util.Text;
 import org.bukkit.command.CommandSender;
-import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
-import java.util.Map;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 
 /**
- * Player-facing text from {@code messages.yml}. Every key has an inline fallback, so the file is
- * optional and a missing key never sends an empty message; blank text silences one entirely.
+ * Player-facing text from {@code messages.yml}. The jar's copy backs every missing key; blank text
+ * silences a message.
  */
 public final class MessageManager {
 
-    private static final Map<String, String> DEFAULTS = Map.of(
-            "prefix", "",
-            "not-grown", "&7That isn't ready to harvest yet.",
-            "not-harvestable", "&cYou can only harvest crops here.",
-            "not-a-tree", "&7You can only fell living trees.",
-            "no-building", "&cYou can't build here.",
-            "reloaded", "&aRoyalRegen reloaded &f%zones%&a zone(s).");
-
     private final JavaPlugin plugin;
-    private FileConfiguration messages;
+    private volatile YamlConfiguration messages;
 
     public MessageManager(JavaPlugin plugin) {
         this.plugin = plugin;
-        if (!new File(plugin.getDataFolder(), "messages.yml").exists()) {
-            plugin.saveResource("messages.yml", false);
-        }
         reload();
     }
 
     public void reload() {
-        this.messages = YamlConfiguration.loadConfiguration(new File(plugin.getDataFolder(), "messages.yml"));
+        File file = new File(plugin.getDataFolder(), "messages.yml");
+        if (!file.exists()) {
+            plugin.saveResource("messages.yml", false);
+        }
+        YamlConfiguration loaded = YamlConfiguration.loadConfiguration(file);
+        try (InputStream in = plugin.getResource("messages.yml")) {
+            if (in != null) {
+                loaded.setDefaults(YamlConfiguration.loadConfiguration(new InputStreamReader(in, StandardCharsets.UTF_8)));
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        this.messages = loaded;
     }
 
+    /** The text for a key, with replacements given as token/value pairs ({@code "%zones%", "3"}). */
+    public String get(String key, String... replacements) {
+        return format(messages.getString(key), replacements);
+    }
+
+    /** A player message, after the configured prefix. */
     public void send(CommandSender target, String key, String... replacements) {
-        String raw = messages.getString(key, DEFAULTS.getOrDefault(key, ""));
-        if (raw == null || raw.isBlank()) {
-            return;
+        String raw = get(key, replacements);
+        if (!raw.isBlank()) {
+            target.sendMessage(Text.chat(messages.getString("prefix", "") + raw));
+        }
+    }
+
+    /** Admin command output, which carries its own heading instead of the prefix. */
+    public void reply(CommandSender target, String key, String... replacements) {
+        String raw = get(key, replacements);
+        if (!raw.isBlank()) {
+            target.sendMessage(Text.chat(raw));
+        }
+    }
+
+    public static String format(String raw, String... replacements) {
+        if (raw == null) {
+            return "";
         }
         for (int i = 0; i + 1 < replacements.length; i += 2) {
             raw = raw.replace(replacements[i], replacements[i + 1]);
         }
-        target.sendMessage(Text.chat(messages.getString("prefix", "") + raw));
+        return raw;
     }
 }

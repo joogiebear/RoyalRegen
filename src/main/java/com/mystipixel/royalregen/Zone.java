@@ -74,7 +74,11 @@ public final class Zone {
     }
 
     /** Read one zone, or null (with a reason logged) if it can't produce a usable one. */
-    public static Zone load(String id, ConfigurationSection sec, Logger logger) {
+    /** Text for a zone that leaves it out of config.yml: {@code %id%} and {@code %name%} templates. */
+    public record Defaults(String displayName, String discoveryTitle, String discoverySubtitle) {
+    }
+
+    public static Zone load(String id, ConfigurationSection sec, Defaults defaults, Logger logger) {
         String world = sec.getString("world", "");
         if (world.isBlank()) {
             logger.warning("Zone '" + id + "' has no world, skipping it.");
@@ -143,11 +147,13 @@ public final class Zone {
             return null;
         }
 
-        String display = sec.getString("display-name", "&f" + id);
+        String display = sec.getString("display-name", defaults.displayName().replace("%id%", id));
         ConfigurationSection disc = sec.getConfigurationSection("discovery");
         boolean announce = disc == null || disc.getBoolean("enabled", true);
-        String title = disc != null ? disc.getString("title", "&6" + display) : "&6" + display;
-        String subtitle = disc != null ? disc.getString("subtitle", "&7Discovered") : "&7Discovered";
+        String defaultTitle = defaults.discoveryTitle().replace("%id%", id).replace("%name%", display);
+        String defaultSubtitle = defaults.discoverySubtitle().replace("%id%", id).replace("%name%", display);
+        String title = disc != null ? disc.getString("title", defaultTitle) : defaultTitle;
+        String subtitle = disc != null ? disc.getString("subtitle", defaultSubtitle) : defaultSubtitle;
         if (wholeWorld) {
             return new Zone(id, world, true, 0, 0, 0, 0, 0, 0,
                     zoneMillis, rules, display, announce, title, subtitle);

@@ -99,12 +99,14 @@ public final class RoyalRegenPlugin extends JavaPlugin {
             getLogger().warning("No 'zones:' section in config.yml, nothing will regenerate.");
             return;
         }
+        Zone.Defaults defaults = new Zone.Defaults(messages.get("zone-defaults.display-name"),
+                messages.get("zone-defaults.discovery-title"), messages.get("zone-defaults.discovery-subtitle"));
         for (String id : section.getKeys(false)) {
             ConfigurationSection entry = section.getConfigurationSection(id);
             if (entry == null || !entry.getBoolean("enabled", true)) {
                 continue;
             }
-            Zone zone = Zone.load(id, entry, getLogger());
+            Zone zone = Zone.load(id, entry, defaults, getLogger());
             if (zone != null) {
                 zones.add(zone);
             }
