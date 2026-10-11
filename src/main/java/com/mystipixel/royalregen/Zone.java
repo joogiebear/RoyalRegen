@@ -52,7 +52,7 @@ public final class Zone {
     private final String discoveryTitle;
     private final String discoverySubtitle;
 
-    private Zone(String id, String world, boolean wholeWorld,
+    Zone(String id, String world, boolean wholeWorld,
                  int minX, int minY, int minZ, int maxX, int maxY, int maxZ,
                  long regenMillis, Map<Material, Rule> rules, String displayName, boolean announce,
                  String discoveryTitle, String discoverySubtitle) {
@@ -258,6 +258,11 @@ public final class Zone {
                 && location.getBlockZ() >= minZ && location.getBlockZ() <= maxZ;
     }
 
+    // a whole-world zone overlaps islands, claims and minion fields, so it never revives their cancels
+    public boolean revivesCancelledBreaks(boolean overrideProtection) {
+        return overrideProtection && !wholeWorld;
+    }
+
     /** The rule for this block, or null when it isn't harvestable here. */
     public Rule rule(Material material) {
         return rules.get(material);
@@ -265,6 +270,7 @@ public final class Zone {
 
     public String id() { return id; }
     public String world() { return world; }
+    public boolean wholeWorld() { return wholeWorld; }
     public long regenMillis() { return regenMillis; }
     public int blockCount() { return rules.size(); }
     public String displayName() { return displayName; }
