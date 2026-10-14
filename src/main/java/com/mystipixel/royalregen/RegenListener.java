@@ -74,6 +74,9 @@ public final class RegenListener implements Listener {
 
     // set while we break felled logs ourselves so they don't each fell a tree; main thread only
     private boolean felling;
+    private Block treeCheckBlock;
+    private int treeCheckTick;
+    private boolean treeCheckResult;
 
     public RegenListener(RoyalRegenPlugin plugin) {
         this.plugin = plugin;
@@ -109,7 +112,7 @@ public final class RegenListener implements Listener {
             tell(player, "not-grown");
             return;
         }
-        if (rule.requireLeaves() && !partOfTree(block)) {
+        if (rule.requireLeaves() && !isTree(block)) {
             event.setCancelled(true);
             tell(player, "not-a-tree");
         }
@@ -230,6 +233,21 @@ public final class RegenListener implements Listener {
         return found;
     }
 
+    // onBreakDeny and onBreak ask about the same block in the same tick, so the second reuses the answer.
+    // Logs a felling breaks hang off an origin that was already checked.
+    private boolean isTree(Block block) {
+        if (felling) {
+            return true;
+        }
+        int tick = plugin.getServer().getCurrentTick();
+        if (tick != treeCheckTick || !block.equals(treeCheckBlock)) {
+            treeCheckResult = partOfTree(block);
+            treeCheckBlock = block;
+            treeCheckTick = tick;
+        }
+        return treeCheckResult;
+    }
+
     // A log is part of a tree if connected logs lead up or sideways to leaves. Built trunks lean and
     // branch, so a straight column check fails them. Never searches downward, or a wall would reach
     // the ground and wander. A heuristic: a post under a decorative canopy also counts.
@@ -294,7 +312,7 @@ public final class RegenListener implements Listener {
         if (rule.requireMature() && !isMature(block)) {
             return;
         }
-        if (rule.requireLeaves() && !partOfTree(block)) {
+        if (rule.requireLeaves() && !isTree(block)) {
             return;
         }
 

@@ -27,7 +27,12 @@ import java.util.logging.Logger;
  */
 public final class RegenService {
 
-    private record Pending(BlockData original, long dueAt) {
+    // row is the pending.yml line, built once here so the periodic save only copies strings
+    private record Pending(BlockData original, long dueAt, String row) {
+        static Pending of(Spot at, BlockData original, long dueAt) {
+            return new Pending(original, dueAt, at.world() + "|" + at.x() + "|" + at.y() + "|" + at.z()
+                    + "|" + dueAt + "|" + original.getAsString());
+        }
     }
 
     // by world name, not Location, so rows survive a world that loads late or is unloaded
@@ -71,7 +76,7 @@ public final class RegenService {
             return;
         }
         BlockData original = block.getBlockData();
-        pending.put(key, new Pending(original, System.currentTimeMillis() + regenMillis));
+        pending.put(key, Pending.of(key, original, System.currentTimeMillis() + regenMillis));
         dirty = true;
 
         // next tick: the server sets the block to air after the break event, overwriting anything now
@@ -106,7 +111,7 @@ public final class RegenService {
         if (original instanceof Brushable brushable) {
             brushable.setDusted(0);
         }
-        pending.put(key, new Pending(original, System.currentTimeMillis() + regenMillis));
+        pending.put(key, Pending.of(key, original, System.currentTimeMillis() + regenMillis));
         dirty = true;
 
         // next tick, once the brush has swapped in the plain form; that form always goes (sand would fall)
@@ -190,11 +195,8 @@ public final class RegenService {
 
     private List<String> snapshot() {
         List<String> rows = new ArrayList<>(pending.size());
-        for (var entry : pending.entrySet()) {
-            Spot at = entry.getKey();
-            rows.add(at.world() + "|" + at.x() + "|" + at.y() + "|"
-                    + at.z() + "|" + entry.getValue().dueAt() + "|"
-                    + entry.getValue().original().getAsString());
+        for (Pending entry : pending.values()) {
+            rows.add(entry.row());
         }
         return List.copyOf(rows);
     }
@@ -225,7 +227,7 @@ public final class RegenService {
             try {
                 Spot at = new Spot(parts[0], Integer.parseInt(parts[1]),
                         Integer.parseInt(parts[2]), Integer.parseInt(parts[3]));
-                pending.put(at, new Pending(plugin.getServer().createBlockData(parts[5]),
+                pending.put(at, Pending.of(at, plugin.getServer().createBlockData(parts[5]),
                         Long.parseLong(parts[4])));
                 queued++;
             } catch (IllegalArgumentException bad) {
