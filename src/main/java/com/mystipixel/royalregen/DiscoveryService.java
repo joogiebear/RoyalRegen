@@ -31,6 +31,8 @@ public final class DiscoveryService {
     private final RoyalRegenPlugin plugin;
     private final Map<UUID, String> currentZone = new HashMap<>();
     private final Map<UUID, Set<String>> discovered = new HashMap<>();
+    // each player's zones as saved, re-sorted only when that player finds a new one
+    private final Map<UUID, List<String>> sorted = new HashMap<>();
     private final SnapshotWriter<Map<String, List<String>>> writer;
     private boolean dirty;
 
@@ -64,6 +66,7 @@ public final class DiscoveryService {
         Set<String> found = discovered.computeIfAbsent(player.getUniqueId(), id -> new HashSet<>());
         boolean first = found.add(zone.id());
         if (first) {
+            sorted.remove(player.getUniqueId());
             dirty = true;
         }
         String heading = first ? zone.discoveryTitle() : zone.displayName();
@@ -122,10 +125,11 @@ public final class DiscoveryService {
         return Map.of();
     }
 
-    // sorted copies, so an unchanged map compares equal and the writer skips it
+    // sorted lists, so an unchanged map compares equal and the writer skips it
     private Map<String, List<String>> snapshot() {
-        Map<String, List<String>> copy = new TreeMap<>();
-        discovered.forEach((id, zones) -> copy.put(id.toString(), zones.stream().sorted().toList()));
+        Map<String, List<String>> copy = new HashMap<>(discovered.size() * 2);
+        discovered.forEach((id, zones) -> copy.put(id.toString(),
+                sorted.computeIfAbsent(id, unused -> zones.stream().sorted().toList())));
         return Map.copyOf(copy);
     }
 
